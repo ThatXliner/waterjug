@@ -6,6 +6,8 @@ import type { Handle } from '@sveltejs/kit';
 import type { Database } from '$lib/supabase';
 
 export const handle: Handle = async ({ event, resolve }) => {
+	// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+	// @ts-ignore: XXX: Fix this properly
 	event.locals.supabase = createServerClient<Database>(
 		PUBLIC_SUPABASE_URL,
 		SUPABASE_SERVICE_ROLE_KEY,

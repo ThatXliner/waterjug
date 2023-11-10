@@ -1,7 +1,6 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 const DEFAULT_RATING = 1200;
-const DEFAULT_RD = 1200;
 export const load: PageServerLoad = async ({ params, locals: { supabase } }) => {
 	const { data: gameName, error: err } = await supabase
 		.from('games')
@@ -63,7 +62,7 @@ async function getRatingFor(supabase: SupabaseClient<Database>, user: string): P
 	const fetched = ratings[0];
 	const you = {
 		rating: fetched.rating,
-		rd: fetched.other_data?.rd ?? defaultRD
+		rd: (fetched.other_data as { rd: number }).rd ?? defaultRD
 	};
 	return you;
 }
