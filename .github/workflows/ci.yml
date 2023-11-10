@@ -11,24 +11,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Setup PNPM v8
-        uses: pnpm/action-setup@v2.2.4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
         with:
-          version: 8.x.x
-      - name: Setup Node v19
-        uses: actions/setup-node@v3
-        with:
-          node-version: 19
-          cache: 'pnpm'
-          cache-dependency-path: 'pnpm-lock.yaml'
+          bun-version: latest
       - name: Setup Supabase v1.86.2
         uses: supabase/setup-cli@v1
         with:
           version: 1.86.2
       - name: Install dependencies
         run: |
-          pnpm install
-          pnpx playwright install --with-deps
+          bun install
+          bunx playwright install --with-deps
       - name: Start database
         run: |
           supabase start
@@ -41,21 +35,15 @@ jobs:
           command: |
             supabase status --output env | node scripts/convert_env.js > .env
             test -s .env
-      - run: pnpm test
+      - run: bun run test
   check-types:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Setup PNPM v8
-        uses: pnpm/action-setup@v2.2.4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
         with:
-          version: 8.x.x
-      - name: Setup Node v19
-        uses: actions/setup-node@v3
-        with:
-          node-version: 19
-          cache: 'pnpm'
-          cache-dependency-path: 'pnpm-lock.yaml'
+          bun-version: latest
       - name: Setup Supabase v1.86.2
         uses: supabase/setup-cli@v1
         with:
