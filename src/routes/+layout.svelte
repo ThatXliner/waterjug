@@ -1,14 +1,12 @@
 <script>
-	// import { onMount } from 'svelte';
 	import '../app.css';
-	// let loggedIn = false;
-	// onMount(async () => {
-	// 	loggedIn = (await supabase.auth.getSession())?.data?.session?.user?.id != undefined;
-	// });
+	export let data;
+
+	$: loggedIn = data.session != null;
+	$: supabase = data.supabase;
 </script>
 
-<!-- Currently bad as other content loads before the nav bar, leading to a sudden jump -->
-<!-- {#if loggedIn}
+{#if loggedIn}
 	<div class="navbar bg-base-100">
 		<div class="flex-none">
 			<button class="btn btn-square btn-ghost">
@@ -27,7 +25,7 @@
 			</button>
 		</div>
 		<div class="flex-1">
-			<a class="btn btn-ghost normal-case text-xl">daisyUI</a>
+			<a class="btn btn-ghost normal-case text-xl font-mono">R区N片r</a>
 		</div>
 		<div class="flex-none">
 			<button
@@ -54,5 +52,5 @@
 			</button>
 		</div>
 	</div>
-{/if} -->
+{/if}
 <slot />
