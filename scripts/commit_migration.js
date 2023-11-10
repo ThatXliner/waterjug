@@ -1,0 +1,1 @@
+// gets the output of `supabase db diff` and applies to a new file (migration) created from `supabase migration new <NAME>` where `<NAME>` is the first argument passed to THIS script (e.g. sys.argv[1] in Python)
