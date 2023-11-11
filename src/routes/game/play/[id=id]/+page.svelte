@@ -5,7 +5,7 @@
 	export let data: PageData;
 	type Output = Pick<Database['public']['Tables']['ratings']['Row'], 'user_id' | 'rating'>;
 	$: dbData = data.data as Output[];
-	$: name = data.gameName[0].name;
+	$: name = data.gameName;
 	$: me = data.user;
 
 	// Not sure if this sorts greatest to least
@@ -15,7 +15,6 @@
 	// TODO: Realtime
 </script>
 
-<h1 class="text-xl">{name}</h1>
 <!-- More like a form saying "i lost against ___" -->
 <!-- Open the modal using ID.showModal() method -->
 
@@ -52,6 +51,7 @@
 		<button>close</button>
 	</form>
 </dialog>
+<h3 class="text-5xl">{name}</h3>
 <button
 	class="btn btn-primary"
 	on:click={() => {

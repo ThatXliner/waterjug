@@ -1,5 +1,11 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
+import type { Actions } from './$types';
+import { SupabaseClient, createClient } from '@supabase/supabase-js';
+import { PUBLIC_SUPABASE_URL } from '$env/static/public';
+import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
+import type { Database } from '$lib/supabase';
+import { getNewRating, defaultRD, type Player } from '$lib/glicko';
 const DEFAULT_RATING = 1200;
 export const load: PageServerLoad = async ({ params, locals: { supabase } }) => {
 	const { data: gameName, error: err } = await supabase
@@ -38,15 +44,10 @@ export const load: PageServerLoad = async ({ params, locals: { supabase } }) => 
 		}
 		data = data as NonNullable<typeof data>;
 	}
-	return { data, gameName, user };
+
+	return { data, gameName: gameName[0].name, user };
 };
 
-import type { Actions } from './$types';
-import { SupabaseClient, createClient } from '@supabase/supabase-js';
-import { PUBLIC_SUPABASE_URL } from '$env/static/public';
-import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
-import type { Database } from '$lib/supabase';
-import { getNewRating, defaultRD, type Player } from '$lib/glicko';
 async function getRatingFor(supabase: SupabaseClient<Database>, user: string): Promise<Player> {
 	const { data: ratings, error } = await supabase
 		.from('ratings')
