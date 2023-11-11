@@ -50,6 +50,14 @@ jobs:
           version: 1.100.1
       - name: Install dependencies
         run: bun install
+      - name: Set environment variables
+        uses: nick-fields/retry@v2
+        with:
+          max_attempts: 3
+          timeout_minutes: 1
+          command: |
+            supabase status --output env | node scripts/convert_env.js > .env
+            test -s .env
       - name: Lint code style
         run: bun run lint
       - name: Check types
