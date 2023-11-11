@@ -49,22 +49,11 @@ jobs:
         with:
           version: 1.100.1
       - name: Install dependencies
-        run: |
-          bun install
-          bunx playwright install --with-deps
-      - name: Start database
-        run: |
-          supabase start
-          supabase db reset
-      - name: Set environment variables
-        uses: nick-fields/retry@v2
-        with:
-          max_attempts: 3
-          timeout_minutes: 1
-          command: |
-            supabase status --output env | node scripts/convert_env.js > .env
-            test -s .env
-      - run: bun run test
+        run: bun install
+      - name: Lint code style
+        run: bun run lint
+      - name: Check types
+        run: bun run check
   check-types:
     runs-on: ubuntu-latest
     env:

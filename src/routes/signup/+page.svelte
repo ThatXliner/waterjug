@@ -6,13 +6,13 @@
 	let email: string;
 	let password: string;
 	onMount(() => {
-		// monkey patch because
-		// something is being a monkey
-		// @ts-ignore
-		Array.prototype.contains = function (...args) {
-			// @ts-ignore
-			return this.includes(...args);
-		};
+		// // monkey patch because
+		// // something is being a monkey
+		// // @ts-ignore
+		// Array.prototype.contains = function (...args) {
+		// 	// @ts-ignore
+		// 	return this.includes(...args);
+		// };
 	});
 </script>
 
@@ -20,31 +20,29 @@
 	<div class="hero-content flex-col">
 		<div class="text-center lg:text-left max-w-sm">
 			<h1 class="text-5xl font-bold">Sign up</h1>
-			<!-- <p class="py-6">
-				Provident cupiditate voluptatem et in. Quaerat fugiat ut assumenda excepturi exercitationem
-				quasi. In deleniti eaque aut repudiandae et a id nisi.
-			</p> -->
 		</div>
 		<div class="card flex-shrink-0 w-full max-w-sm shadow-2xl bg-base-100">
 			<form class="card-body">
 				<div class="form-control">
-					<label class="label">
+					<label class="label" for="email-input">
 						<span class="label-text">Email</span>
 					</label>
 					<input
 						type="email"
 						placeholder="email"
+						id="email-input"
 						class="input input-bordered"
 						required
 						bind:value={email}
 					/>
 				</div>
 				<div class="form-control">
-					<label class="label">
+					<label class="label" for="password-input">
 						<span class="label-text">Password (at least 6 characters)</span>
 					</label>
 					<input
 						type="password"
+						id="password-input"
 						placeholder="password"
 						class="input input-bordered"
 						required
@@ -55,7 +53,7 @@
 					<button
 						class="btn btn-primary"
 						on:click={async () => {
-							const { data, error } = await supabase.auth.signUp({
+							const { data: _, error } = await supabase.auth.signUp({
 								email,
 								password,
 								options: {

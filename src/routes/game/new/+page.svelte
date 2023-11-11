@@ -19,7 +19,7 @@
 			<h1 class="mb-5 text-5xl font-bold">Create a New Game</h1>
 			<form method="POST" action="?/create">
 				<div class="form-control">
-					<label class="label">
+					<label class="label" for="gameName">
 						<span class="label-text">Game Name</span>
 					</label>
 					<input
@@ -27,6 +27,7 @@
 						type="text"
 						placeholder="Enter game name"
 						name="gameName"
+						id="gameName"
 						required
 					/>
 				</div>

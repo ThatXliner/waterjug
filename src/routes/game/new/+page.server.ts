@@ -5,7 +5,7 @@ import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
 import type { Database } from '$lib/supabase';
 export const actions: Actions = {
-	create: async ({ request, locals: { supabase } }) => {
+	create: async ({ request }) => {
 		const formData = await request.formData();
 		const name = formData.get('gameName') as string;
 		// for some reason, we have to do this (bypass RLS)
