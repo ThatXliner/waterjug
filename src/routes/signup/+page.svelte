@@ -53,7 +53,7 @@
 					<button
 						class="btn btn-primary"
 						on:click={async () => {
-							const { data: _, error } = await supabase.auth.signUp({
+							const { error } = await supabase.auth.signUp({
 								email,
 								password,
 								options: {
