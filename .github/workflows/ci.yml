@@ -38,6 +38,9 @@ jobs:
       - run: bun run test
   check-types:
     runs-on: ubuntu-latest
+    env:
+      # Setting an environment variable with the value of a configuration variable
+      PROJECT_ID: ${{ vars.PROJECT_ID }}
     steps:
       - uses: actions/checkout@v3
       - name: Setup Bun
