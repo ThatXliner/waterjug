@@ -40,7 +40,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # Setting an environment variable with the value of a configuration variable
-      PROJECT_ID: ${{ vars.PROJECT_ID }}
+      PROJECT_ID: ${{ secrets.PROJECT_ID }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
     steps:
       - uses: actions/checkout@v3
       - name: Setup Bun
