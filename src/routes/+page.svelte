@@ -31,10 +31,11 @@
 		<div class="card flex-shrink-0 w-full max-w-sm shadow-2xl bg-base-100">
 			<form class="card-body">
 				<div class="form-control">
-					<label class="label">
+					<label class="label" for="email-input">
 						<span class="label-text">Email</span>
 					</label>
 					<input
+						id="email-input"
 						type="email"
 						placeholder="email"
 						class="input input-bordered"
@@ -43,10 +44,11 @@
 					/>
 				</div>
 				<div class="form-control">
-					<label class="label">
+					<label class="label" for="password-input">
 						<span class="label-text">Password</span>
 					</label>
 					<input
+						id="password-input"
 						type="password"
 						placeholder="password"
 						class="input input-bordered"
@@ -54,7 +56,13 @@
 						bind:value={password}
 					/>
 					<label class="label">
-						<a href="#" class="label-text-alt link link-hover">Forgot password?</a>
+						<button
+							on:click={async () => {
+								// TODO
+								window.alert('Not implemented yet');
+							}}
+							class="label-text-alt link link-hover">Forgot password?</button
+						>
 					</label>
 				</div>
 				<div class="form-control mt-6">
