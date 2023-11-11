@@ -40,8 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # Setting an environment variable with the value of a configuration variable
-      PROJECT_ID: ${{ secrets.PROJECT_ID }}
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      DB_URL: ${{ secrets.DB_URL }}
     steps:
       - uses: actions/checkout@v3
       - name: Setup Bun
@@ -71,10 +70,10 @@ jobs:
       - name: (main only) Ensure there are no unpushed migrations
         if: ${{ github.ref_name == 'main' }}
         run: |
-          if supabase migration list | grep -E '\s*(\d+) │ \s+ │ .+$'; then
+          if supabase migration list --db-url $DB_URL | grep -E '\s*(\d+) │ \s+ │ .+$'; then
             echo "Unpushed migrations detected:" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
-            echo "$(supabase migration list | grep -E '\s*(\d+) │ \s+ │ .+$' --color=never)" >> $GITHUB_STEP_SUMMARY
+            echo "$(supabase migration list --db-url $DB_URL | grep -E '\s*(\d+) │ \s+ │ .+$' --color=never)" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
