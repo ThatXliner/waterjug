@@ -2,7 +2,7 @@
 
 # A string used to distinguish different Supabase projects on the same host. Defaults to the
 # working directory name when running `supabase init`.
-project_id = "makeitelo"
+project_id = "waterjug"
 
 [api]
 enabled = true
@@ -69,7 +69,7 @@ file_size_limit = "50MiB"
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
-site_url = "https://makeitelo.vercel.app/" # 5173 is the default port ala Vite
+site_url = "https://waterjug.vercel.app/" # 5173 is the default port ala Vite
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
 additional_redirect_urls = []
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
