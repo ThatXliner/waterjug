@@ -19,7 +19,6 @@
 	let password: string;
 </script>
 
-<h1>R区N片r: ranking you with ratings</h1>
 <div class="hero min-h-screen bg-base-200">
 	<div class="hero-content flex-col lg:flex-row-reverse justify-stretch">
 		<div class="text-center lg:text-left max-w-sm">
