@@ -7,6 +7,19 @@ import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
 import type { Database } from '$lib/supabase';
 import { getNewRating, defaultRD, type Player } from '$lib/glicko';
 const DEFAULT_RATING = 1200;
+async function fetchRatings(supabase: SupabaseClient<Database>, game_id: number) {
+	const res = await supabase
+		.from('ratings')
+		.select('rating, user_id, auth!inner(email)')
+		.eq('game_id', game_id);
+	const data = res.data;
+	console.log(data, res.error);
+	if (res.error != null) {
+		throw res.error;
+	}
+	// Data can't be null if there's no error
+	return data as NonNullable<typeof data>;
+}
 export const load: PageServerLoad = async ({ params, locals: { supabase } }) => {
 	const { data: gameName, error: err } = await supabase
 		.from('games')
@@ -15,34 +28,23 @@ export const load: PageServerLoad = async ({ params, locals: { supabase } }) => 
 	if (err != null) {
 		throw error(500, err);
 	}
-	// TODO: use a username instead of user_id
-	const res = await supabase
-		.from('ratings')
-		.select('rating, user_id')
-		.eq('game_id', parseInt(params.id));
-	let data = res.data;
-	if (res.error != null) {
-		throw error(500, res.error);
-	}
-	// Data can't be null if there's no error
-	data = data as NonNullable<typeof data>;
+	let data = await fetchRatings(supabase, parseInt(params.id)).catch((err) => {
+		throw error(500, err);
+	});
 	const user = (await supabase.auth.getUser())?.data?.user?.id;
 	if (!user) {
 		throw error(401, 'No user');
 	}
 	if (data.filter((x) => x.user_id == user).length == 0) {
-		await supabase
-			.from('ratings')
-			.insert({ game_id: parseInt(params.id), user_id: user, rating: DEFAULT_RATING });
-		const res = await supabase
-			.from('ratings')
-			.select('rating, user_id')
-			.eq('game_id', parseInt(params.id));
-		data = res.data;
-		if (res.error != null) {
-			throw error(500, res.error);
-		}
-		data = data as NonNullable<typeof data>;
+		await supabase.from('ratings').insert({
+			game_id: parseInt(params.id),
+			user_id: user,
+			rating: DEFAULT_RATING,
+			other_data: { rd: defaultRD }
+		});
+		data = await fetchRatings(supabase, parseInt(params.id)).catch((err) => {
+			throw error(500, err);
+		});
 	}
 
 	return { data, gameName: gameName[0].name, user };
