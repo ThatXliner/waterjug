@@ -51,28 +51,33 @@
 		<button>close</button>
 	</form>
 </dialog>
-<h3 class="text-5xl">{name}</h3>
-<button
-	class="btn btn-primary"
-	on:click={() => {
-		modal.showModal();
-	}}>Add a result</button
->
-<div class="overflow-x-auto">
-	<table class="table w-full">
-		<thead>
-			<tr>
-				<th class="text-left">Rank</th>
-				<th class="text-left">Person</th>
-			</tr>
-		</thead>
-		<tbody>
-			{#each sorted as { user_id, rating }}
+<main class="m-3 flex-col space-y-5">
+	<div class="flex justify-evenly">
+		<h3 class="text-5xl">{name}</h3>
+		<button
+			class="btn btn-primary"
+			on:click={() => {
+				modal.showModal();
+			}}>Add a result</button
+		>
+	</div>
+	<div class="overflow-x-auto w-fit mx-auto border-2 rounded-box p-3">
+		<table class="table">
+			<thead>
 				<tr>
-					<td>{rating}</td>
-					<td>{user_id}</td>
+					<th class="text-left">Rank</th>
+					<th class="text-left">Person</th>
 				</tr>
-			{/each}
-		</tbody>
-	</table>
-</div>
+			</thead>
+			<tbody>
+				{#each sorted as { user_id, rating }}
+					<tr>
+						<td>{rating}</td>
+						<td>{user_id}</td>
+						<td><a href="" class="btn">Go to profile</a></td>
+					</tr>
+				{/each}
+			</tbody>
+		</table>
+	</div>
+</main>
