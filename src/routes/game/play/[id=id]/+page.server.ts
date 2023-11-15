@@ -8,10 +8,7 @@ import type { Database } from '$lib/supabase';
 import { getNewRating, defaultRD, type Player } from '$lib/glicko';
 const DEFAULT_RATING = 1200;
 async function fetchRatings(supabase: SupabaseClient<Database>, game_id: number) {
-	const res = await supabase
-		.from('ratings')
-		.select('rating, user_id, auth.users!inner(email)')
-		.eq('game_id', game_id);
+	const res = await supabase.from('ratings').select('rating, user_id').eq('game_id', game_id);
 	const data = res.data;
 	console.log(data, res.error);
 	if (res.error != null) {
