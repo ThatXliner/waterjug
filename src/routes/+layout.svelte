@@ -33,7 +33,7 @@ Otherwise, just put it in the sidebar
 					</label>
 				</div>
 				<div class="flex-1">
-					<a href="/" class="btn btn-ghost normal-case text-xl font-mono">R区N片r</a>
+					<a href="/" class="btn btn-ghost normal-case text-xl font-mono">WaterJug</a>
 				</div>
 				<!-- <div class="flex-auto justify-start">
 					<h1 class="text-3xl">{$page.data.title ?? ''}</h1>
