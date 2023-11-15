@@ -65,7 +65,7 @@
 		<table class="table">
 			<thead>
 				<tr>
-					<th class="text-left">Rank</th>
+					<th class="text-left">Rating</th>
 					<th class="text-left">Person</th>
 				</tr>
 			</thead>
@@ -74,7 +74,7 @@
 					<tr>
 						<td>{rating}</td>
 						<td>{user_id}</td>
-						<td><a href="" class="btn">Go to profile</a></td>
+						<td><a href="/profile/{user_id}" class="btn">Go to profile</a></td>
 					</tr>
 				{/each}
 			</tbody>
