@@ -30,11 +30,11 @@
 	Back to home</a
 >
 <div class="hero min-h-screen bg-base-200">
-	<div class="hero-content flex-col">
+	<div class="hero-content flex-col justify-stretch">
 		<div class="text-center lg:text-left max-w-sm">
-			<h1 class="text-5xl font-bold">Sign Up</h1>
+			<h1 class="text-5xl font-bold">Login now!</h1>
 			<p class="py-6">
-				Already have an account? <a href="/login" class="link link-primary">Log in now</a>
+				No account? <a href="/signup" class="link link-primary">Sign up now</a>
 			</p>
 		</div>
 		<div class="card flex-shrink-0 w-full max-w-sm shadow-2xl bg-base-100">
@@ -44,9 +44,9 @@
 						<span class="label-text">Email</span>
 					</label>
 					<input
+						id="email-input"
 						type="email"
 						placeholder="email"
-						id="email-input"
 						class="input input-bordered"
 						required
 						bind:value={email}
@@ -54,35 +54,45 @@
 				</div>
 				<div class="form-control">
 					<label class="label" for="password-input">
-						<span class="label-text">Password (at least 6 characters)</span>
+						<span class="label-text">Password</span>
 					</label>
 					<input
-						type="password"
 						id="password-input"
+						type="password"
 						placeholder="password"
 						class="input input-bordered"
 						required
 						bind:value={password}
 					/>
+					<label class="label">
+						<button
+							on:click={async () => {
+								// TODO
+								window.alert('Not implemented yet');
+							}}
+							class="label-text-alt link link-hover">Forgot password?</button
+						>
+					</label>
 				</div>
 				<div class="form-control mt-6">
 					<button
 						class="btn btn-primary"
 						on:click={async () => {
-							const { error } = await supabase.auth.signUp({
+							// todo: use forms + proper validation
+							// i use proper forms i can actually get free
+							// validation
+							const { data, error } = await supabase.auth.signInWithPassword({
 								email,
-								password,
-								options: {
-									emailRedirectTo: '/'
-								}
+								password
 							});
 							if (error != null) {
-								console.log('What');
+								console.log(error);
 								window.alert(error);
 								return;
 							}
-							window.location.href = '/';
-						}}>Sign Up</button
+							console.log(data);
+							window.location.href = '/dashboard';
+						}}>Login</button
 					>
 				</div>
 			</form>
