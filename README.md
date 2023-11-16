@@ -1,4 +1,4 @@
-# MakeItElo
+# WaterJug
 
 TODO:
 
@@ -14,5 +14,3 @@ TODO:
   - [ ] Parameters for the Glicko system
   - [ ] Parameters for the Elo system
   - [ ] Custom formulas
-
-- [ ] Rebrand to "Rankr"
