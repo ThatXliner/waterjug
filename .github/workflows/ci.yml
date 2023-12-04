@@ -15,10 +15,10 @@ jobs:
         uses: oven-sh/setup-bun@v1
         with:
           bun-version: latest
-      - name: Setup Supabase v1.100.1
+      - name: Setup Supabase v1.115.4
         uses: supabase/setup-cli@v1
         with:
-          version: 1.100.1
+          version: 1.115.4
       - name: Install dependencies
         run: |
           bun install
@@ -44,10 +44,10 @@ jobs:
         uses: oven-sh/setup-bun@v1
         with:
           bun-version: latest
-      - name: Setup Supabase v1.100.1
+      - name: Setup Supabase v1.115.4
         uses: supabase/setup-cli@v1
         with:
-          version: 1.100.1
+          version: 1.115.4
       - name: Install dependencies
         run: bun install
       - name: Start database
@@ -77,10 +77,10 @@ jobs:
         uses: oven-sh/setup-bun@v1
         with:
           bun-version: latest
-      - name: Setup Supabase v1.100.1
+      - name: Setup Supabase v1.115.4
         uses: supabase/setup-cli@v1
         with:
-          version: 1.100.1
+          version: 1.115.4
       - name: Install dependencies
         run: bun install
       - name: Start database
