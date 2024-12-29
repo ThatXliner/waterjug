@@ -1,4 +1,5 @@
 <script lang="ts">
+	import waterjug from '$lib/assets/waterjug.png';
 	/** @type {import('./$types').PageData} */
 	export let data;
 	let { supabase } = data;
@@ -29,6 +30,7 @@
 		</div>
 	</header> -->
 	<main class="flex flex-col justify-center items-center px-8 grow-[3] min-h-screen md:min-h-0">
+		<img src={waterjug} alt="WaterJug Logo" />
 		<h2 class="text-6xl font-extrabold text-center text-zinc-800 dark:text-zinc-200 text-shadow-lg">
 			WaterJug
 		</h2>

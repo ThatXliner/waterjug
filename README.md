@@ -1,5 +1,7 @@
 # WaterJug
 
+![](./src/lib/assets/waterjug.png)
+
 TODO:
 
 - [ ] Invite-only games

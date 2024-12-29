@@ -12,6 +12,7 @@ const readFilePromise = (...args) =>
 	});
 
 const stdin = await readFilePromise(process.stdin.fd, 'utf-8');
+console.log(stdin);
 const REMAP = {
 	API_URL: 'PUBLIC_SUPABASE_URL',
 	ANON_KEY: 'PUBLIC_SUPABASE_ANON_KEY',

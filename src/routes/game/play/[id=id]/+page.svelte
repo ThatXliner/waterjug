@@ -37,15 +37,15 @@
 					{/if}
 				{/each}
 			</select>
-			<div class="modal-action">
-				<form method="dialog">
-					<button class="btn">close</button>
-				</form>
-				<button class="btn btn-primary" type="submit" disabled={winner == 'Select a person'}
-					>Submit</button
-				>
-			</div>
 		</form>
+
+		<div class="modal-action">
+			<form method="dialog"><button class="btn">close</button></form>
+
+			<button class="btn btn-primary" type="submit" disabled={winner == 'Select a person'}
+				>Submit</button
+			>
+		</div>
 	</div>
 	<form method="dialog" class="modal-backdrop">
 		<button>close</button>
