@@ -23,14 +23,14 @@ export const load: PageServerLoad = async ({ params, locals: { supabase } }) => 
 		.select('name')
 		.eq('game_id', parseInt(params.id));
 	if (err != null) {
-		throw error(500, err);
+		error(500, err);
 	}
 	let data = await fetchRatings(supabase, parseInt(params.id)).catch((err) => {
-		throw error(500, err);
+		error(500, err);
 	});
 	const user = (await supabase.auth.getUser())?.data?.user?.id;
 	if (!user) {
-		throw error(401, 'No user');
+		error(401, 'No user');
 	}
 	if (data.filter((x) => x.user_id == user).length == 0) {
 		await supabase.from('ratings').insert({
@@ -40,7 +40,7 @@ export const load: PageServerLoad = async ({ params, locals: { supabase } }) => 
 			other_data: { rd: defaultRD }
 		});
 		data = await fetchRatings(supabase, parseInt(params.id)).catch((err) => {
-			throw error(500, err);
+			error(500, err);
 		});
 	}
 

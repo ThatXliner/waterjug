@@ -21,6 +21,6 @@ export const actions: Actions = {
 		if (error != null) {
 			return fail(400, { error, incorrect: true });
 		}
-		throw redirect(303, `/game/play/${data[0].game_id}`);
+		redirect(303, `/game/play/${data[0].game_id}`);
 	}
 };
