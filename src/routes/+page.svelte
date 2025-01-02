@@ -1,5 +1,6 @@
 <script lang="ts">
 	import waterjug from '$lib/assets/waterjug.png';
+	import ClerkButton from '$lib/ClerkButton.svelte';
 	/** @type {import('./$types').PageData} */
 	export let data;
 	let { supabase } = data;
@@ -29,17 +30,22 @@
 			<div class="hover:bg-zinc-200 dark:hover:bg-zinc-700">Sign Up</div>
 		</div>
 	</header> -->
-	<main class="flex flex-col justify-center items-center px-8 grow-[3] min-h-screen md:min-h-0">
-		<img src={waterjug} alt="WaterJug Logo" />
-		<h2 class="text-6xl font-extrabold text-center text-zinc-800 dark:text-zinc-200 text-shadow-lg">
-			WaterJug
-		</h2>
-		<p class="mt-4 text-lg text-center text-zinc-600 dark:text-zinc-400">
-			The one and only rating tracker
-		</p>
+	<main class="flex justify-evenly items-center px-8 grow-[3] min-h-screen md:min-h-0">
+		<div>
+			<img src={waterjug} alt="WaterJug Logo" />
+			<h2
+				class="text-6xl font-extrabold text-center mt-8 text-zinc-800 dark:text-zinc-200 text-shadow-lg"
+			>
+				WaterJug
+			</h2>
+			<p class="mt-4 text-lg text-center text-zinc-600 dark:text-zinc-400">
+				The one and only rating tracker
+			</p>
+		</div>
 		<div class="mt-8 flex gap-4">
-			<a href="/login" class="btn btn-outline btn-primary">Log In</a>
-			<a href="/signup" class="btn btn-primary">Sign Up</a>
+			<!-- <a href="/login" class="btn btn-outline btn-primary">Log In</a>
+			<a href="/signup" class="btn btn-primary">Sign Up</a> -->
+			<ClerkButton />
 		</div>
 	</main>
 	<div class="bg-zinc-50 dark:bg-zinc-800 w-full py-12 px-8">
