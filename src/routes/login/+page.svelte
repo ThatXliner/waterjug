@@ -83,7 +83,8 @@
 							// validation
 							const { data, error } = await supabase.auth.signInWithPassword({
 								email,
-								password
+								password,
+								redirect: '/dashboard'
 							});
 							if (error != null) {
 								console.log(error);
@@ -91,7 +92,6 @@
 								return;
 							}
 							console.log(data);
-							window.location.href = '/dashboard';
 						}}>Login</button
 					>
 				</div>

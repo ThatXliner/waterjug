@@ -1,9 +1,22 @@
 <script lang="ts">
 	import '../app.css';
-	export let data;
+	import { invalidate } from '$app/navigation';
+	import { onMount } from 'svelte';
 
-	$: loggedIn = data.session != null;
-	$: supabase = data.supabase;
+	let { data, children } = $props();
+	let { session, supabase } = $derived(data);
+
+	onMount(() => {
+		const { data } = supabase.auth.onAuthStateChange((_, newSession) => {
+			if (newSession?.expires_at !== session?.expires_at) {
+				invalidate('supabase:auth');
+			}
+		});
+
+		return () => data.subscription.unsubscribe();
+	});
+
+	const loggedIn = $derived(session != null);
 </script>
 
 <!-- TODO: mobile responsiveness
