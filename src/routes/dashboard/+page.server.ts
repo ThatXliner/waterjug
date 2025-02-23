@@ -2,7 +2,7 @@ import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import type { IterableElement, SetNonNullable } from 'type-fest';
 
-export const load: PageServerLoad = async ({ locals: { supabase,safeGetSession } }) => {
+export const load: PageServerLoad = async ({ locals: { supabase, safeGetSession } }) => {
 	const currentUserId = (await safeGetSession())?.user?.id;
 	if (currentUserId == undefined) {
 		error(401, 'no user');
