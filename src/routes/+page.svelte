@@ -1,36 +1,24 @@
 <script lang="ts">
-	import waterjug from '$lib/assets/waterjug.png';
-	/** @type {import('./$types').PageData} */
-	export let data;
-	let { supabase } = data;
 	import { onMount } from 'svelte';
-	onMount(async () => {
-		const { data, error } = await supabase.auth.getSession();
-		if (data.session != null) {
-			console.log('loaded', data);
-			window.location.href = '/dashboard';
-		}
-		if (error != null) {
-			console.log(error);
-			window.alert(error);
-		}
+
+	let { data } = $props();
+
+	onMount(() => {
+		const { supabase } = data;
+		supabase.auth.getSession().then(({ data: sessionData, error }) => {
+			if (sessionData.session != null) {
+				window.location.href = '/dashboard';
+			}
+			if (error != null) {
+				window.alert(error);
+			}
+		});
 	});
 </script>
 
-<!--
-// v0 by Vercel.
-// https://v0.dev/t/hkjAcCxjkon
--->
 <section class="w-full h-screen bg-base-100 flex flex-col">
-	<!-- <header class="flex justify-between items-center px-8 py-4">
-		<h1 class="text-4xl font-bold text-zinc-900 dark:text-zinc-100">WaterJug</h1>
-		<div class="flex gap-4">
-			<div class="hover:bg-zinc-100 dark:hover:bg-zinc-800">Log In</div>
-			<div class="hover:bg-zinc-200 dark:hover:bg-zinc-700">Sign Up</div>
-		</div>
-	</header> -->
 	<main class="flex flex-col justify-center items-center px-8 grow-[3] min-h-screen md:min-h-0">
-		<img src={waterjug} alt="WaterJug Logo" />
+		<img src="/waterjug.png" alt="WaterJug Logo" />
 		<h2 class="text-6xl font-extrabold text-center text-zinc-800 dark:text-zinc-200 text-shadow-lg">
 			WaterJug
 		</h2>
@@ -46,7 +34,6 @@
 		<h2 class="text-3xl font-semibold text-center text-zinc-800 dark:text-zinc-200">
 			Our Features
 		</h2>
-		<!-- TODO: Carousel?? -->
 		<div class="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
 			<div class="flex flex-col items-center text-center">
 				<svg
@@ -92,18 +79,12 @@
 						class="link">Glicko</a
 					>, the leading rating system used in
 					<a
-						href="https://www.chess.com/blog/kurtgodden/elo-to-glicko-your-rating-explained#:~:text=It%20is%20the%20Glicko%20system,been%20dubbed%20the%20Rating%20Deviation."
+						href="https://www.chess.com/blog/kurtgodden/elo-to-glicko-your-rating-explained"
 						class="link">Chess.com</a
 					>,
-					<a
-						class="link"
-						href="https://tetris.wiki/TETR.IO#:~:text=The%20rating%20system%20is%20called,decreases%20for%20each%20loss%20exclusively."
-						>Tetr.io</a
-					>,
-					<a
-						href="https://store.steampowered.com/oldnews/38643#:~:text=Glicko%20rating%20system"
-						class="link">Team Fortress 2</a
-					>, and many other games
+					<a class="link" href="https://tetris.wiki/TETR.IO">Tetr.io</a>,
+					<a href="https://store.steampowered.com/oldnews/38643" class="link">Team Fortress 2</a>,
+					and many more
 				</p>
 			</div>
 			<div class="flex flex-col items-center text-center">

@@ -1,10 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import type { ActionData } from './$types';
 
-	// /** @type {import('./$types').PageData} */
-	// export let data;
-	export let form: ActionData;
+	let { form } = $props();
 	onMount(() => {
 		if (form?.error) {
 			console.log(form.error);

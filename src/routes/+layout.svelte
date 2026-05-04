@@ -17,6 +17,11 @@
 	});
 
 	const loggedIn = $derived(session != null);
+
+	async function handleSignOut() {
+		await supabase.auth.signOut();
+		window.location.href = '/';
+	}
 </script>
 
 <!-- TODO: mobile responsiveness
@@ -48,17 +53,8 @@ Otherwise, just put it in the sidebar
 				<div class="flex-1">
 					<a href="/" class="btn btn-ghost normal-case text-xl font-mono">WaterJug</a>
 				</div>
-				<!-- <div class="flex-auto justify-start">
-					<h1 class="text-3xl">{$page.data.title ?? ''}</h1>
-				</div> -->
 				<div class="flex-none">
-					<button
-						class="btn btn-square btn-ghost"
-						on:click={async () => {
-							await supabase.auth.signOut();
-							window.location.href = '/';
-						}}
-					>
+					<button class="btn btn-square btn-ghost" aria-label="Sign out" onclick={handleSignOut}>
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
 							fill="none"
@@ -76,25 +72,19 @@ Otherwise, just put it in the sidebar
 					</button>
 				</div>
 			</div>
-			<slot />
+			{@render children()}
 		</div>
 		<div class="drawer-side">
-			<label for="my-drawer" aria-label="close sidebar" class="drawer-overlay" />
+			<label for="my-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
 			<ul class="menu p-4 w-80 min-h-full bg-base-200 text-base-content">
 				<!-- Sidebar content here -->
 				<li><a class="link" href="/dashboard">Dashboard</a></li>
 				<li>
-					<button
-						class="link"
-						on:click={async () => {
-							await supabase.auth.signOut();
-							window.location.href = '/';
-						}}>Log out</button
-					>
+					<button class="link" onclick={handleSignOut}>Log out</button>
 				</li>
 			</ul>
 		</div>
 	</div>
 {:else}
-	<slot />
+	{@render children()}
 {/if}

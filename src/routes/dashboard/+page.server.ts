@@ -1,6 +1,5 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import type { IterableElement, SetNonNullable } from 'type-fest';
 
 export const load: PageServerLoad = async ({ locals: { supabase, safeGetSession } }) => {
 	const currentUserId = (await safeGetSession())?.user?.id;
@@ -14,5 +13,5 @@ export const load: PageServerLoad = async ({ locals: { supabase, safeGetSession 
 	if (err != null) {
 		error(501, err);
 	}
-	return { ratings: ratings as SetNonNullable<IterableElement<typeof ratings>>[] };
+	return { ratings };
 };

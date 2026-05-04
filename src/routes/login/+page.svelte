@@ -1,22 +1,36 @@
 <script lang="ts">
-	/** @type {import('./$types').PageData} */
-	export let data;
-	const { supabase } = data;
 	import { onMount } from 'svelte';
-	onMount(async () => {
-		const { data, error } = await supabase.auth.getSession();
-		if (data.session != null) {
-			console.log('loaded', data);
-			window.location.href = '/dashboard';
-		}
-		if (error != null) {
-			console.log(error);
-			window.alert(error);
-		}
+
+	let { data } = $props();
+	let supabase = $derived(data.supabase);
+
+	onMount(() => {
+		supabase.auth.getSession().then(({ data: sessionData, error }) => {
+			if (sessionData.session != null) {
+				window.location.href = '/dashboard';
+			}
+			if (error != null) {
+				window.alert(error);
+			}
+		});
 	});
 
-	let email: string;
-	let password: string;
+	let email = $state('');
+	let password = $state('');
+
+	function handleForgotPassword() {
+		window.alert('Not implemented yet');
+	}
+
+	function handleLogin() {
+		supabase.auth.signInWithPassword({ email, password }).then(({ data, error }) => {
+			if (error != null) {
+				window.alert(error);
+				return;
+			}
+			console.log(data);
+		});
+	}
 </script>
 
 <a href="/" class="fixed btn btn-primary mt-4 ml-4"
@@ -65,35 +79,13 @@
 						bind:value={password}
 					/>
 					<label class="label">
-						<button
-							on:click={async () => {
-								// TODO
-								window.alert('Not implemented yet');
-							}}
-							class="label-text-alt link link-hover">Forgot password?</button
+						<button onclick={handleForgotPassword} class="label-text-alt link link-hover"
+							>Forgot password?</button
 						>
 					</label>
 				</div>
 				<div class="form-control mt-6">
-					<button
-						class="btn btn-primary"
-						on:click={async () => {
-							// todo: use forms + proper validation
-							// i use proper forms i can actually get free
-							// validation
-							const { data, error } = await supabase.auth.signInWithPassword({
-								email,
-								password,
-								redirect: '/dashboard'
-							});
-							if (error != null) {
-								console.log(error);
-								window.alert(error);
-								return;
-							}
-							console.log(data);
-						}}>Login</button
-					>
+					<button class="btn btn-primary" onclick={handleLogin}>Login</button>
 				</div>
 			</form>
 		</div>

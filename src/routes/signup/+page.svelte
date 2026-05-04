@@ -1,22 +1,38 @@
 <script lang="ts">
-	/** @type {import('./$types').PageData} */
-	export let data;
-	const { supabase } = data;
 	import { onMount } from 'svelte';
-	onMount(async () => {
-		const { data, error } = await supabase.auth.getSession();
-		if (data.session != null) {
-			console.log('loaded', data);
-			window.location.href = '/dashboard';
-		}
-		if (error != null) {
-			console.log(error);
-			window.alert(error);
-		}
+
+	let { data } = $props();
+	let supabase = $derived(data.supabase);
+
+	onMount(() => {
+		supabase.auth.getSession().then(({ data: sessionData, error }) => {
+			if (sessionData.session != null) {
+				window.location.href = '/dashboard';
+			}
+			if (error != null) {
+				window.alert(error);
+			}
+		});
 	});
 
-	let email: string;
-	let password: string;
+	let email = $state('');
+	let password = $state('');
+
+	function handleSignUp() {
+		supabase.auth
+			.signUp({
+				email,
+				password,
+				options: { emailRedirectTo: '/' }
+			})
+			.then(({ error }) => {
+				if (error != null) {
+					window.alert(error);
+					return;
+				}
+				window.location.href = '/';
+			});
+	}
 </script>
 
 <a href="/" class="fixed btn btn-primary mt-4 ml-4"
@@ -66,24 +82,7 @@
 					/>
 				</div>
 				<div class="form-control mt-6">
-					<button
-						class="btn btn-primary"
-						on:click={async () => {
-							const { error } = await supabase.auth.signUp({
-								email,
-								password,
-								options: {
-									emailRedirectTo: '/'
-								}
-							});
-							if (error != null) {
-								console.log('What');
-								window.alert(error);
-								return;
-							}
-							window.location.href = '/';
-						}}>Sign Up</button
-					>
+					<button class="btn btn-primary" onclick={handleSignUp}>Sign Up</button>
 				</div>
 			</form>
 		</div>

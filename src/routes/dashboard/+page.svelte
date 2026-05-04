@@ -1,7 +1,6 @@
 <script lang="ts">
-	import type { PageData } from './$types';
-	export let data: PageData;
-	$: ({ ratings } = data);
+	let { data } = $props();
+	let ratings = $derived(data.ratings);
 </script>
 
 <div class="flex flex-col w-full min-h-screen p-8">
@@ -13,7 +12,7 @@
 		{#each ratings as rating}
 			<div class="card w-96 bg-base-200 shadow-xl">
 				<div class="card-body">
-					<h2 class="card-title">{rating.games.name}</h2>
+					<h2 class="card-title">{rating.games?.[0]?.name}</h2>
 					<p>Your rating: {rating.rating}</p>
 					<div class="card-actions">
 						<a href="/game/play/{rating.game_id}" class="btn btn-primary w-full">Go to game</a>

@@ -1,22 +1,17 @@
 <script lang="ts">
-	import type { PageData } from './$types';
-	import type { Database } from '$lib/supabase';
+	let { data } = $props();
+	let dbData = $derived(data.data);
+	let name = $derived(data.gameName);
+	let me = $derived(data.user);
 
-	export let data: PageData;
-	type Output = Pick<Database['public']['Tables']['ratings']['Row'], 'user_id' | 'rating'>;
-	$: dbData = data.data as Output[];
-	$: name = data.gameName;
-	$: me = data.user;
+	let sorted = $derived([...dbData].sort((a, b) => b.rating - a.rating));
+	let modal = $state(null);
+	let winner = $state('');
 
-	// Not sure if this sorts greatest to least
-	$: sorted = dbData.sort((a, b) => b.rating - a.rating);
-	let modal: HTMLDialogElement;
-	let winner: string;
-	// TODO: Realtime
+	function openModal() {
+		modal?.showModal();
+	}
 </script>
-
-<!-- More like a form saying "i lost against ___" -->
-<!-- Open the modal using ID.showModal() method -->
 
 <dialog bind:this={modal} class="modal">
 	<div class="modal-box">
@@ -42,9 +37,7 @@
 		<div class="modal-action">
 			<form method="dialog"><button class="btn">close</button></form>
 
-			<button class="btn btn-primary" type="submit" disabled={winner == 'Select a person'}
-				>Submit</button
-			>
+			<button class="btn btn-primary" type="submit" disabled={!winner}>Submit</button>
 		</div>
 	</div>
 	<form method="dialog" class="modal-backdrop">
@@ -54,12 +47,7 @@
 <main class="m-3 flex-col space-y-5">
 	<div class="flex justify-evenly">
 		<h3 class="text-5xl">{name}</h3>
-		<button
-			class="btn btn-primary"
-			on:click={() => {
-				modal.showModal();
-			}}>Add a result</button
-		>
+		<button class="btn btn-primary" onclick={openModal}>Add a result</button>
 	</div>
 	<div class="overflow-x-auto w-fit mx-auto border-2 rounded-box p-3">
 		<table class="table">
@@ -70,11 +58,11 @@
 				</tr>
 			</thead>
 			<tbody>
-				{#each sorted as { user_id, rating }}
+				{#each sorted as user_rating}
 					<tr>
-						<td>{rating}</td>
-						<td>{user_id}</td>
-						<td><a href="/profile/{user_id}" class="btn">Go to profile</a></td>
+						<td>{user_rating.rating}</td>
+						<td>{user_rating.user_id}</td>
+						<td><a href="/profile/{user_rating.user_id}" class="btn">Go to profile</a></td>
 					</tr>
 				{/each}
 			</tbody>

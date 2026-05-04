@@ -10,7 +10,6 @@ TODO:
 - [ ] Peer-checked game win/loss
 - [ ] Fix roles (and client vs server Supabase client)
 - [ ] Configurable rating systems
-
   - [ ] Configurable default rating
   - [ ] Configurable "tournament" period
   - [ ] Parameters for the Glicko system

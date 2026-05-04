@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import type { Actions } from './$types';
-import { default as SupabaseClient, createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
 import type { Database } from '$lib/supabase';
@@ -32,7 +32,7 @@ export const load: PageServerLoad = async ({ params, locals: { supabase } }) => 
 	if (!user) {
 		error(401, 'No user');
 	}
-	if (data.filter((x) => x.user_id == user).length == 0) {
+	if (data.filter((x: { user_id: string }) => x.user_id == user).length == 0) {
 		await supabase.from('ratings').insert({
 			game_id: parseInt(params.id),
 			user_id: user,
@@ -67,7 +67,7 @@ async function getRatingFor(supabase: SupabaseClient<Database>, user: string): P
 	return you;
 }
 export const actions: Actions = {
-	default: async ({ request, locals: { getSession } }) => {
+	default: async ({ request, locals: { safeGetSession } }) => {
 		const formData = await request.formData();
 		const winner = formData.get('winner') as string;
 		// XXX: Same RLS problem that I'm too lazy to resolve right now
@@ -76,7 +76,8 @@ export const actions: Actions = {
 			PUBLIC_SUPABASE_URL,
 			SUPABASE_SERVICE_ROLE_KEY
 		);
-		const user = (await getSession())?.user?.id;
+		const { session } = await safeGetSession();
+		const user = session?.user?.id;
 		console.log(user);
 		if (user == null) {
 			throw new Error('No user');
