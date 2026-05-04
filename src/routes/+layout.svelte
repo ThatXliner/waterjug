@@ -4,7 +4,7 @@
 	import { onMount } from 'svelte';
 
 	let { data, children } = $props();
-	let { session, supabase } = $derived(data);
+	let { session, supabase, displayName } = $derived(data);
 
 	onMount(() => {
 		const { data } = supabase.auth.onAuthStateChange((_, newSession) => {
@@ -53,7 +53,8 @@ Otherwise, just put it in the sidebar
 				<div class="flex-1">
 					<a href="/" class="btn btn-ghost normal-case text-xl font-mono">WaterJug</a>
 				</div>
-				<div class="flex-none">
+				<div class="flex-none flex items-center gap-2">
+					<span class="text-sm opacity-70">{displayName || session?.user?.email}</span>
 					<button class="btn btn-square btn-ghost" aria-label="Sign out" onclick={handleSignOut}>
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
@@ -77,7 +78,7 @@ Otherwise, just put it in the sidebar
 		<div class="drawer-side">
 			<label for="my-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
 			<ul class="menu p-4 w-80 min-h-full bg-base-200 text-base-content">
-				<!-- Sidebar content here -->
+				<li class="menu-title text-base-content/70">{displayName || session?.user?.email}</li>
 				<li><a class="link" href="/dashboard">Dashboard</a></li>
 				<li>
 					<button class="link" onclick={handleSignOut}>Log out</button>

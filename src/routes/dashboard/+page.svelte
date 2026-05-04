@@ -1,11 +1,65 @@
 <script lang="ts">
-	let { data } = $props();
+	import { enhance } from '$app/forms';
+
+	let { data, form } = $props();
 	let ratings = $derived(data.ratings);
+	let displayName = $derived(data.displayName);
+	let editingName = $state(false);
+	let nameValue = $state('');
 </script>
 
 <div class="flex flex-col w-full min-h-screen p-8">
 	<header class="flex items-center justify-between mb-8">
-		<h1 class="text-3xl font-bold">My Games</h1>
+		<div>
+			<h1 class="text-3xl font-bold">
+				{#if displayName}
+					{displayName}
+				{:else}
+					My Games
+				{/if}
+			</h1>
+			{#if !displayName && !editingName}
+				<button
+					class="btn btn-sm btn-ghost mt-1"
+					onclick={() => {
+						editingName = true;
+						nameValue = '';
+					}}
+				>
+					Set your display name
+				</button>
+			{/if}
+			{#if editingName}
+				<form
+					method="POST"
+					action="?/setDisplayName"
+					use:enhance={() => {
+						editingName = false;
+					}}
+					class="flex items-center gap-2 mt-1"
+				>
+					<input
+						type="text"
+						name="displayName"
+						class="input input-bordered input-sm"
+						bind:value={nameValue}
+						required
+						placeholder="Your display name"
+					/>
+					<button class="btn btn-sm btn-primary" type="submit">Save</button>
+					<button
+						class="btn btn-sm btn-ghost"
+						type="button"
+						onclick={() => {
+							editingName = false;
+						}}>Cancel</button
+					>
+				</form>
+			{/if}
+			{#if form?.error}
+				<p class="text-error text-sm mt-1">{form.error}</p>
+			{/if}
+		</div>
 		<a class="btn btn-primary" href="/game/new">Create a game</a>
 	</header>
 	<main class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">

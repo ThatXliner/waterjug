@@ -1,24 +1,23 @@
-import { error } from '@sveltejs/kit';
-import type { PageServerLoad } from './$types';
-import type { Actions } from './$types';
+import { error, fail } from '@sveltejs/kit';
+import type { PageServerLoad, Actions } from './$types';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
 import type { Database } from '$lib/supabase';
 import { getNewRating, defaultRD, type Player } from '$lib/glicko';
 const DEFAULT_RATING = 1200;
+
 async function fetchRatings(supabase: SupabaseClient<Database>, game_id: number) {
 	const res = await supabase.from('ratings').select('rating, user_id').eq('game_id', game_id);
 	const data = res.data;
-	console.log(data, res.error);
 	if (res.error != null) {
 		throw res.error;
 	}
-	// Data can't be null if there's no error
 	return data as NonNullable<typeof data>;
 }
+
 export const load: PageServerLoad = async ({ params, locals: { supabase } }) => {
-	const { data: gameName, error: err } = await supabase
+	const { data: gameData, error: err } = await supabase
 		.from('games')
 		.select('name')
 		.eq('game_id', parseInt(params.id));
@@ -44,7 +43,26 @@ export const load: PageServerLoad = async ({ params, locals: { supabase } }) => 
 		});
 	}
 
-	return { data, gameName: gameName[0].name, user };
+	const userIds = data.map((r) => r.user_id);
+	const { data: profiles } = await supabase
+		.from('profiles')
+		.select('user_id, display_name')
+		.in('user_id', userIds);
+	const profileMap = new Map((profiles ?? []).map((p) => [p.user_id, p.display_name]));
+
+	const { data: tournaments } = await supabase
+		.from('tournaments')
+		.select('*')
+		.eq('game_id', parseInt(params.id))
+		.order('created_at', { ascending: false });
+
+	return {
+		data,
+		gameName: gameData[0].name,
+		user,
+		profileMap: Object.fromEntries(profileMap),
+		tournaments: tournaments ?? []
+	};
 };
 
 async function getRatingFor(supabase: SupabaseClient<Database>, user: string): Promise<Player> {
@@ -52,7 +70,6 @@ async function getRatingFor(supabase: SupabaseClient<Database>, user: string): P
 		.from('ratings')
 		.select('rating, other_data')
 		.eq('user_id', user);
-	console.log(ratings);
 	if (error != null) {
 		throw error;
 	}
@@ -66,19 +83,17 @@ async function getRatingFor(supabase: SupabaseClient<Database>, user: string): P
 	};
 	return you;
 }
+
 export const actions: Actions = {
 	default: async ({ request, locals: { safeGetSession } }) => {
 		const formData = await request.formData();
 		const winner = formData.get('winner') as string;
-		// XXX: Same RLS problem that I'm too lazy to resolve right now
-		// update: maybe we don't need this anymore
 		const supabaseServer = await createClient<Database>(
 			PUBLIC_SUPABASE_URL,
 			SUPABASE_SERVICE_ROLE_KEY
 		);
 		const { session } = await safeGetSession();
 		const user = session?.user?.id;
-		console.log(user);
 		if (user == null) {
 			throw new Error('No user');
 		}
@@ -86,8 +101,6 @@ export const actions: Actions = {
 		const oldThem = await getRatingFor(supabaseServer, winner);
 		const newYou = getNewRating(oldYou, [oldThem], [0]);
 		const newThem = getNewRating(oldThem, [oldYou], [1]);
-		console.log('Before (looser):', oldYou, 'After:', newYou);
-		console.log('Before (winner):', oldThem, 'After:', newThem);
 		{
 			const { data, error } = await supabaseServer
 				.from('ratings')
@@ -95,7 +108,6 @@ export const actions: Actions = {
 				.eq('user_id', user)
 				.select();
 			if (error != null) throw error;
-			console.log('Yu', data);
 		}
 		const { data, error } = await supabaseServer
 			.from('ratings')
@@ -103,6 +115,42 @@ export const actions: Actions = {
 			.eq('user_id', winner)
 			.select();
 		if (error != null) throw error;
-		console.log('them', data);
+	},
+
+	createTournament: async ({ request, params, locals: { supabase, safeGetSession } }) => {
+		const { user } = await safeGetSession();
+		if (!user) error(401, 'No user');
+
+		const formData = await request.formData();
+		const name = formData.get('name')?.toString().trim();
+		const type = formData.get('type')?.toString();
+		const participants = formData.getAll('participants') as string[];
+
+		if (!name) return fail(400, { tournamentError: 'Name is required' });
+		if (!type || !['bracket', 'round_robin'].includes(type))
+			return fail(400, { tournamentError: 'Invalid tournament type' });
+		if (participants.length < 2)
+			return fail(400, { tournamentError: 'Select at least 2 participants' });
+
+		const gameId = parseInt(params.id);
+		const { data: tournament, error: insertErr } = await supabase
+			.from('tournaments')
+			.insert({ game_id: gameId, name, type, created_by: user.id, status: 'pending' })
+			.select('tournament_id')
+			.single();
+
+		if (insertErr) return fail(500, { tournamentError: insertErr.message });
+
+		const participantRows = participants.map((userId) => ({
+			tournament_id: tournament.tournament_id,
+			user_id: userId
+		}));
+		const { error: partErr } = await supabase
+			.from('tournament_participants')
+			.insert(participantRows);
+
+		if (partErr) return fail(500, { tournamentError: partErr.message });
+
+		return { tournamentSuccess: true };
 	}
 };
