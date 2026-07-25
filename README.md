@@ -34,7 +34,7 @@
 
 ## Why WaterJug?
 
-Most rating apps are built around one game. WaterJug starts with the people instead: make a shared ladder for chess, table tennis, office foosball, fighting games, or whatever your group is currently taking far too seriously.
+Make a shared leaderboard for chess, table tennis, office foosball, fighting games, or whatever your group is currently taking far too seriously.
 
 - **One ladder per game** — create a game and get a dedicated, ranked leaderboard.
 - **Ratings that understand uncertainty** — an in-house Glicko implementation tracks both rating and rating deviation.
