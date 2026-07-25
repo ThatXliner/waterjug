@@ -190,6 +190,26 @@ export type Database = {
     }
     Functions: {
       ensure_game_rating: { Args: { p_game_id: number }; Returns: undefined }
+      apply_rating_result: {
+        Args: {
+          p_expected_configuration_revision: number
+          p_expected_loser_other_data: Json
+          p_expected_loser_rating: number
+          p_expected_loser_type: string
+          p_expected_winner_other_data: Json
+          p_expected_winner_rating: number
+          p_expected_winner_type: string
+          p_game_id: number
+          p_loser_id: string
+          p_new_loser_other_data: Json
+          p_new_loser_rating: number
+          p_new_type: string
+          p_new_winner_other_data: Json
+          p_new_winner_rating: number
+          p_winner_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role: "player" | "admin"

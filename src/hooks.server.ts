@@ -4,6 +4,7 @@ import { sequence } from '@sveltejs/kit/hooks';
 
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import { isAppRole } from '$lib/roles';
+import { getVerifiedSession } from '$lib/server/session';
 import type { Database } from '$lib/supabase';
 
 const supabase: Handle = async ({ event, resolve }) => {
@@ -38,23 +39,7 @@ const supabase: Handle = async ({ event, resolve }) => {
 	 * JWT before returning the session.
 	 */
 	event.locals.safeGetSession = async () => {
-		const {
-			data: { session }
-		} = await event.locals.supabase.auth.getSession();
-		if (!session) {
-			return { session: null, user: null };
-		}
-
-		const {
-			data: { user },
-			error
-		} = await event.locals.supabase.auth.getUser();
-		if (error) {
-			// JWT validation has failed
-			return { session: null, user: null };
-		}
-
-		return { session, user };
+		return getVerifiedSession(event.locals.supabase.auth);
 	};
 
 	return resolve(event, {

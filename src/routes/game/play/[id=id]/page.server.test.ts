@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import fc from 'fast-check';
 import type { User } from '@supabase/supabase-js';
 
 const getPrivilegedSupabase = vi.fn();
@@ -46,6 +47,36 @@ describe('rating result authorization', () => {
 				status: 400,
 				data: { resultError: 'Select another player as the winner' }
 			})
+		);
+		expect(getPrivilegedSupabase).not.toHaveBeenCalled();
+	});
+
+	it('rejects generated malformed winner credentials before privileged access', async () => {
+		const action = actions.default;
+		if (!action) throw new Error('default action is missing');
+
+		await fc.assert(
+			fc.asyncProperty(
+				fc
+					.string()
+					.filter(
+						(value) =>
+							!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+								value
+							)
+					),
+				async (winner) => {
+					const formData = new FormData();
+					formData.set('winner', winner);
+					const result = await action({
+						request: { formData: async () => formData },
+						params: { id: '1' },
+						locals: { user, role: 'player' }
+					} as never);
+
+					expect(result).toEqual(expect.objectContaining({ status: 400 }));
+				}
+			)
 		);
 		expect(getPrivilegedSupabase).not.toHaveBeenCalled();
 	});
