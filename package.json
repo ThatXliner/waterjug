@@ -16,7 +16,7 @@
 		"format": "prettier --write .",
 		"test:integration": "playwright test",
 		"test:unit": "vitest",
-		"update-types": "supabase gen types typescript --local > src/lib/supabase.ts"
+		"update-types": "supabase gen types --lang typescript --local > src/lib/supabase.ts && node scripts/normalize_generated_file.js src/lib/supabase.ts"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",

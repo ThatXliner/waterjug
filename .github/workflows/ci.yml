@@ -69,9 +69,10 @@ jobs:
           bunx supabase db reset
       - name: Verify generated types match Postgres schema
         run: |
-          bunx supabase gen types typescript \
+          bunx supabase gen types --lang typescript \
             --db-url postgresql://postgres:postgres@127.0.0.1:54322/postgres \
             > src/lib/supabase.ts
+          node scripts/normalize_generated_file.js src/lib/supabase.ts
           if ! git diff --ignore-space-at-eol --exit-code --quiet src/lib/supabase.ts; then
               echo "Detected uncommitted changes after build. See status below:\n" >> $GITHUB_STEP_SUMMARY
               echo '```diff' >> $GITHUB_STEP_SUMMARY
