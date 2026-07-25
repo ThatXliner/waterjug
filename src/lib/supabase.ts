@@ -65,18 +65,21 @@ export type Database = {
         Row: {
           created_at: string
           display_name: string
+          role: Database["public"]["Enums"]["app_role"]
           user_id: string
           username: string | null
         }
         Insert: {
           created_at?: string
           display_name?: string
+          role?: Database["public"]["Enums"]["app_role"]
           user_id: string
           username?: string | null
         }
         Update: {
           created_at?: string
           display_name?: string
+          role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
           username?: string | null
         }
@@ -189,7 +192,7 @@ export type Database = {
       ensure_game_rating: { Args: { p_game_id: number }; Returns: undefined }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "player" | "admin"
     }
     CompositeTypes: {
       [_ in never]: never

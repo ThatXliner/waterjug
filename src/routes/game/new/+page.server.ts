@@ -1,16 +1,15 @@
 import { redirect, fail } from '@sveltejs/kit';
-import type { Actions } from './$types';
-import { createClient } from '@supabase/supabase-js';
-import { PUBLIC_SUPABASE_URL } from '$env/static/public';
-import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
-import type { Database } from '$lib/supabase';
+import type { Actions, PageServerLoad } from './$types';
 import { parseRatingConfigurationForm, RatingConfigurationError } from '$lib/rating';
-import { requireAuthenticatedUserId } from '$lib/server/auth';
+import { requireRole } from '$lib/server/auth';
+
+export const load: PageServerLoad = ({ locals }) => {
+	requireRole(locals, 'admin');
+};
 
 export const actions: Actions = {
-	create: async ({ request, locals: { safeGetSession } }) => {
-		const { user } = await safeGetSession();
-		const userId = requireAuthenticatedUserId(user);
+	create: async ({ request, locals }) => {
+		const user = requireRole(locals, 'admin');
 		const formData = await request.formData();
 		const name = formData.get('gameName')?.toString().trim();
 		if (!name) return fail(400, { configurationError: 'Game name is required.' });
@@ -25,18 +24,14 @@ export const actions: Actions = {
 						: 'Invalid rating configuration.'
 			});
 		}
-		// Game creation currently uses the service role to bypass RLS, so the
-		// authenticated boundary above must remain ahead of all privileged work.
-		const { data, error } = await createClient<Database>(
-			PUBLIC_SUPABASE_URL,
-			SUPABASE_SERVICE_ROLE_KEY
-		)
+		const { data, error } = await locals.supabase
 			.from('games')
-			.insert([{ name, created_by: userId, rating_configuration: ratingConfiguration }])
-			.select();
+			.insert([{ name, created_by: user.id, rating_configuration: ratingConfiguration }])
+			.select('game_id')
+			.single();
 		if (error != null) {
 			return fail(400, { configurationError: error.message });
 		}
-		redirect(303, `/game/play/${data[0].game_id}`);
+		redirect(303, `/game/play/${data.game_id}`);
 	}
 };
