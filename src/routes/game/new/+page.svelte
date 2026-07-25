@@ -201,8 +201,7 @@
 							id="invitedEmails"
 							placeholder="player@example.com, teammate@example.com"
 							aria-describedby="inviteHelp"
-							required
-						></textarea>
+							required></textarea>
 						<p id="inviteHelp" class="label-text-alt mt-1 text-left">
 							Enter email addresses separated by commas, spaces, or new lines.
 						</p>
