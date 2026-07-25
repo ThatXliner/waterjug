@@ -867,7 +867,9 @@ export const Constants = {
     Enums: {},
   },
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["player", "admin"],
+    },
   },
   storage: {
     Enums: {
