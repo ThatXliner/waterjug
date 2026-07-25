@@ -1,4 +1,4 @@
-<script lang="ts">
+<script>
 	import { enhance } from '$app/forms';
 
 	let { data, form } = $props();
@@ -7,19 +7,27 @@
 	let me = $derived(data.user);
 	let profileMap = $derived(data.profileMap);
 	let tournaments = $derived(data.tournaments);
+	let configuration = $derived(data.configuration);
+	let isOwner = $derived(data.isOwner);
 
-	function displayName(userId: string) {
+	/** @param {string} userId */
+	function displayName(userId) {
 		return profileMap[userId] || userId.slice(0, 8);
 	}
 
 	let sorted = $derived([...dbData].sort((a, b) => b.rating - a.rating));
-	let modal = $state<HTMLDialogElement | null>(null);
+	/** @type {HTMLDialogElement | null} */
+	let modal = $state(null);
 	let winner = $state('');
-	let tournamentModal = $state<HTMLDialogElement | null>(null);
+	/** @type {HTMLDialogElement | null} */
+	let tournamentModal = $state(null);
+	/** @type {HTMLDialogElement | null} */
+	let configurationModal = $state(null);
+	let configurationSystem = $state('glicko');
 	let tournamentForm = $state({
 		name: '',
 		type: 'bracket',
-		selectedParticipants: new Set<string>()
+		selectedParticipants: new Set()
 	});
 
 	function openModal() {
@@ -28,7 +36,12 @@
 	function openTournamentModal() {
 		tournamentModal?.showModal();
 	}
-	function toggleParticipant(userId: string) {
+	function openConfigurationModal() {
+		configurationSystem = configuration.system;
+		configurationModal?.showModal();
+	}
+	/** @param {string} userId */
+	function toggleParticipant(userId) {
 		if (tournamentForm.selectedParticipants.has(userId)) {
 			tournamentForm.selectedParticipants.delete(userId);
 		} else {
@@ -145,13 +158,170 @@
 	</form>
 </dialog>
 
+<dialog bind:this={configurationModal} class="modal">
+	<div class="modal-box max-w-2xl">
+		<h3 class="font-bold text-lg mb-4">Rating configuration</h3>
+		<form method="POST" action="?/configure" class="space-y-4">
+			<div class="grid gap-4 sm:grid-cols-3">
+				<label class="form-control">
+					<span class="label-text">System</span>
+					<select class="select select-bordered" name="system" bind:value={configurationSystem}>
+						<option value="glicko">Glicko</option>
+						<option value="elo">Elo</option>
+						<option value="custom">Custom</option>
+					</select>
+				</label>
+				<label class="form-control">
+					<span class="label-text">Starting rating</span>
+					<input
+						class="input input-bordered"
+						name="defaultRating"
+						type="number"
+						value={configuration.defaultRating}
+						min="0"
+						max="1000000"
+						required
+					/>
+				</label>
+				<label class="form-control">
+					<span class="label-text">Period (days)</span>
+					<input
+						class="input input-bordered"
+						name="periodDays"
+						type="number"
+						value={configuration.periodDays}
+						min="0.0416667"
+						max="3650"
+						step="any"
+						required
+					/>
+				</label>
+			</div>
+			<fieldset class="rounded-box border border-base-300 p-3">
+				<legend class="px-2 font-semibold">Glicko</legend>
+				<div class="grid gap-3 sm:grid-cols-2">
+					<label class="form-control"
+						><span class="label-text">Initial deviation</span><input
+							class="input input-bordered"
+							name="glickoInitialDeviation"
+							type="number"
+							value={configuration.glicko.initialDeviation}
+							min="1"
+							max="1000"
+							step="any"
+							required
+						/></label
+					>
+					<label class="form-control"
+						><span class="label-text">Maximum deviation</span><input
+							class="input input-bordered"
+							name="glickoMaxDeviation"
+							type="number"
+							value={configuration.glicko.maxDeviation}
+							min="1"
+							max="1000"
+							step="any"
+							required
+						/></label
+					>
+					<label class="form-control"
+						><span class="label-text">Deviation increase</span><input
+							class="input input-bordered"
+							name="glickoPeriodDeviationIncrease"
+							type="number"
+							value={configuration.glicko.periodDeviationIncrease}
+							min="0"
+							max="1000"
+							step="any"
+							required
+						/></label
+					>
+					<label class="form-control"
+						><span class="label-text">Scale</span><input
+							class="input input-bordered"
+							name="glickoScale"
+							type="number"
+							value={configuration.glicko.scale}
+							min="1"
+							max="10000"
+							step="any"
+							required
+						/></label
+					>
+				</div>
+			</fieldset>
+			<fieldset class="rounded-box border border-base-300 p-3">
+				<legend class="px-2 font-semibold">Elo</legend>
+				<div class="grid gap-3 sm:grid-cols-2">
+					<label class="form-control"
+						><span class="label-text">K-factor</span><input
+							class="input input-bordered"
+							name="eloKFactor"
+							type="number"
+							value={configuration.elo.kFactor}
+							min="0.01"
+							max="1000"
+							step="any"
+							required
+						/></label
+					>
+					<label class="form-control"
+						><span class="label-text">Scale</span><input
+							class="input input-bordered"
+							name="eloScale"
+							type="number"
+							value={configuration.elo.scale}
+							min="1"
+							max="10000"
+							step="any"
+							required
+						/></label
+					>
+				</div>
+			</fieldset>
+			<label class="form-control">
+				<span class="label-text">Custom formula</span>
+				<input
+					class="input input-bordered font-mono"
+					name="customFormula"
+					value={configuration.custom.formula}
+					maxlength="500"
+					required
+				/>
+				<span class="label-text-alt"
+					>rating, opponentRating, score, expected; abs, min, max, pow, round, floor, ceil</span
+				>
+			</label>
+			{#if form?.configurationError}
+				<p class="text-error text-sm">{form.configurationError}</p>
+			{/if}
+			<p class="text-xs opacity-70">
+				Changing the starting rating affects new players only; existing ratings are preserved.
+			</p>
+			<div class="modal-action">
+				<button class="btn" type="button" onclick={() => configurationModal?.close()}>Close</button>
+				<button class="btn btn-primary" type="submit">Save configuration</button>
+			</div>
+		</form>
+	</div>
+	<form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
 <main class="m-3 flex-col space-y-5">
 	<div class="flex justify-evenly">
 		<h3 class="text-5xl">{name}</h3>
 		<div class="flex gap-2">
 			<button class="btn btn-primary" onclick={openModal}>Add a result</button>
 			<button class="btn btn-secondary" onclick={openTournamentModal}>Create Tournament</button>
+			{#if isOwner}
+				<button class="btn" onclick={openConfigurationModal}>Rating settings</button>
+			{/if}
 		</div>
+	</div>
+	<div class="mx-auto flex w-fit gap-2 text-sm">
+		<span class="badge badge-outline">{configuration.system}</span>
+		<span class="badge badge-outline">Starts at {configuration.defaultRating}</span>
+		<span class="badge badge-outline">{configuration.periodDays}-day period</span>
 	</div>
 	<div class="overflow-x-auto w-fit mx-auto border-2 rounded-box p-3">
 		<table class="table">

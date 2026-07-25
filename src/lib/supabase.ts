@@ -37,18 +37,24 @@ export type Database = {
       games: {
         Row: {
           created_at: string
+          created_by: string | null
           game_id: number
           name: string
+          rating_configuration: Json
         }
         Insert: {
           created_at?: string
+          created_by?: string | null
           game_id?: number
           name: string
+          rating_configuration?: Json
         }
         Update: {
           created_at?: string
+          created_by?: string | null
           game_id?: number
           name?: string
+          rating_configuration?: Json
         }
         Relationships: []
       }
@@ -860,4 +866,3 @@ export const Constants = {
     },
   },
 } as const
-
