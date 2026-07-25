@@ -37,4 +37,22 @@ describe('Supabase environment conversion', () => {
 			'PUBLIC_SUPABASE_URL=http://localhost'
 		]);
 	});
+
+	test('maps the JSON fallback emitted when optional services are stopped', () => {
+		expect(
+			convert(
+				JSON.stringify({
+					ANON_KEY: 'anon-value',
+					API_URL: 'http://127.0.0.1:54321',
+					DB_URL: 'postgresql://postgres:postgres@127.0.0.1:54322/postgres',
+					SERVICE_ROLE_KEY: 'service-value'
+				})
+			)
+		).toEqual([
+			'DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres',
+			'PUBLIC_SUPABASE_ANON_KEY=anon-value',
+			'PUBLIC_SUPABASE_URL=http://127.0.0.1:54321',
+			'SUPABASE_SERVICE_ROLE_KEY=service-value'
+		]);
+	});
 });
