@@ -7,7 +7,9 @@ import {
 	parseRatingConfigurationForm,
 	parseRatingConfigurationNumber,
 	parseRatingPeriodDaysFormValue,
-	RatingConfigurationError
+	RatingConfigurationError,
+	RatingFormulaError,
+	validateRatingFormula
 } from './rating';
 
 describe('rating configuration', () => {
@@ -57,7 +59,6 @@ describe('rating configuration', () => {
 		expect(() => compileRatingFormula('constructor(1)')).toThrow('not supported');
 		expect(() => compileRatingFormula('rating / 0')).toThrow('finite');
 	});
-
 	test.each([
 		'',
 		' ',
@@ -90,6 +91,26 @@ describe('rating configuration', () => {
 		formData.set('customFormula', DEFAULT_RATING_CONFIGURATION.custom.formula);
 
 		expect(() => parseRatingConfigurationForm(formData)).toThrow(RatingConfigurationError);
+	});
+
+	test('rejects resource exhaustion and invalid arity with located formula errors', () => {
+		for (const formula of [
+			`${'('.repeat(33)}rating${')'.repeat(33)}`,
+			Array.from({ length: 101 }, () => '1').join('+'),
+			'pow(2)',
+			'abs(1, 2)',
+			'1e309'
+		]) {
+			try {
+				validateRatingFormula(formula);
+				throw new Error(`formula unexpectedly validated: ${formula}`);
+			} catch (error) {
+				expect(error).toBeInstanceOf(RatingFormulaError);
+				expect((error as Error).message.length).toBeGreaterThan(8);
+			}
+		}
+		expect(() => validateRatingFormula('pow(2)')).toThrow('expects 2 arguments');
+		expect(() => validateRatingFormula('rating.member')).toThrow('character 7');
 	});
 });
 

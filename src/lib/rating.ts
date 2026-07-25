@@ -298,30 +298,65 @@ export async function commitRatingConfiguration(
 	return { configuration, revision: nextRevision };
 }
 
-type FormulaContext = {
+export type RatingFormulaContext = {
 	rating: number;
 	opponentRating: number;
 	score: number;
 	expected: number;
 };
 
-type Token = { type: 'number' | 'name' | 'operator' | 'eof'; value: string };
+export class RatingFormulaError extends Error {
+	constructor(
+		message: string,
+		readonly position?: number
+	) {
+		super(position === undefined ? message : `${message} at character ${position + 1}`);
+		this.name = 'RatingFormulaError';
+	}
+}
+
+type Token = {
+	type: 'number' | 'name' | 'operator' | 'eof';
+	value: string;
+	position: number;
+};
+type FormulaFunction = {
+	minimumArguments: number;
+	maximumArguments: number;
+	evaluate: (...values: number[]) => number;
+};
+const MAX_FORMULA_LENGTH = 500;
+const MAX_FORMULA_TOKENS = 200;
+const MAX_FORMULA_DEPTH = 32;
+const MAX_ABSOLUTE_RATING = 1_000_000_000;
 const FORMULA_NAMES = new Set(['rating', 'opponentRating', 'score', 'expected']);
-const FORMULA_FUNCTIONS: Record<string, (...values: number[]) => number> = {
-	abs: Math.abs,
-	min: Math.min,
-	max: Math.max,
-	pow: Math.pow,
-	round: Math.round,
-	floor: Math.floor,
-	ceil: Math.ceil
+const FORMULA_FUNCTIONS: Record<string, FormulaFunction> = {
+	abs: { minimumArguments: 1, maximumArguments: 1, evaluate: Math.abs },
+	min: { minimumArguments: 1, maximumArguments: 10, evaluate: Math.min },
+	max: { minimumArguments: 1, maximumArguments: 10, evaluate: Math.max },
+	pow: { minimumArguments: 2, maximumArguments: 2, evaluate: Math.pow },
+	round: { minimumArguments: 1, maximumArguments: 1, evaluate: Math.round },
+	floor: { minimumArguments: 1, maximumArguments: 1, evaluate: Math.floor },
+	ceil: { minimumArguments: 1, maximumArguments: 1, evaluate: Math.ceil }
 };
 
 function tokenize(expression: string): Token[] {
-	if (expression.length === 0) throw new Error('formula cannot be empty');
-	if (expression.length > 500) throw new Error('formula cannot exceed 500 characters');
+	if (typeof expression !== 'string') throw new RatingFormulaError('formula must be a string');
+	if (expression.trim().length === 0) throw new RatingFormulaError('formula cannot be empty');
+	if (expression.length > MAX_FORMULA_LENGTH) {
+		throw new RatingFormulaError(`formula cannot exceed ${MAX_FORMULA_LENGTH} characters`);
+	}
 	const tokens: Token[] = [];
 	let position = 0;
+	const push = (token: Token) => {
+		if (tokens.length >= MAX_FORMULA_TOKENS) {
+			throw new RatingFormulaError(
+				`formula cannot exceed ${MAX_FORMULA_TOKENS} tokens`,
+				token.position
+			);
+		}
+		tokens.push(token);
+	};
 	while (position < expression.length) {
 		const rest = expression.slice(position);
 		const whitespace = /^\s+/.exec(rest);
@@ -331,31 +366,31 @@ function tokenize(expression: string): Token[] {
 		}
 		const number = /^(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?/i.exec(rest);
 		if (number) {
-			tokens.push({ type: 'number', value: number[0] });
+			push({ type: 'number', value: number[0], position });
 			position += number[0].length;
 			continue;
 		}
 		const name = /^[A-Za-z_][A-Za-z0-9_]*/.exec(rest);
 		if (name) {
-			tokens.push({ type: 'name', value: name[0] });
+			push({ type: 'name', value: name[0], position });
 			position += name[0].length;
 			continue;
 		}
 		const operator = rest[0];
 		if ('+-*/%^(),'.includes(operator)) {
-			tokens.push({ type: 'operator', value: operator });
+			push({ type: 'operator', value: operator, position });
 			position += 1;
 			continue;
 		}
-		throw new Error(`unsupported character "${operator}" at position ${position + 1}`);
+		throw new RatingFormulaError(`unsupported character "${operator}"`, position);
 	}
-	tokens.push({ type: 'eof', value: '' });
+	tokens.push({ type: 'eof', value: '', position: expression.length });
 	return tokens;
 }
 
 type FormulaNode =
 	| { type: 'number'; value: number }
-	| { type: 'variable'; name: keyof FormulaContext }
+	| { type: 'variable'; name: keyof RatingFormulaContext }
 	| { type: 'unary'; operator: '+' | '-'; value: FormulaNode }
 	| { type: 'binary'; operator: string; left: FormulaNode; right: FormulaNode }
 	| { type: 'call'; name: string; values: FormulaNode[] };
@@ -363,22 +398,49 @@ type FormulaNode =
 function parseFormula(expression: string): FormulaNode {
 	const tokens = tokenize(expression);
 	let position = 0;
+	let depth = 0;
 	const current = () => tokens[position];
 	const consume = (value?: string) => {
 		const token = current();
-		if (value !== undefined && token.value !== value) throw new Error(`expected "${value}"`);
+		if (value !== undefined && token.value !== value) {
+			throw new RatingFormulaError(
+				`expected "${value}", but found "${token.value || 'end of formula'}"`,
+				token.position
+			);
+		}
 		position += 1;
 		return token;
+	};
+	const nested = <T>(at: number, parse: () => T): T => {
+		depth += 1;
+		if (depth > MAX_FORMULA_DEPTH) {
+			throw new RatingFormulaError(
+				`formula cannot exceed ${MAX_FORMULA_DEPTH} levels of nesting`,
+				at
+			);
+		}
+		try {
+			return parse();
+		} finally {
+			depth -= 1;
+		}
 	};
 	const primary = (): FormulaNode => {
 		const token = current();
 		if (token.type === 'number') {
 			consume();
-			return { type: 'number', value: Number(token.value) };
+			const value = Number(token.value);
+			if (!Number.isFinite(value)) {
+				throw new RatingFormulaError(
+					`numeric literal "${token.value}" must be finite`,
+					token.position
+				);
+			}
+			return { type: 'number', value };
 		}
 		if (token.value === '(') {
 			consume('(');
-			const value = add();
+			const value = nested(token.position, add);
 			consume(')');
 			return value;
 		}
@@ -386,39 +448,71 @@ function parseFormula(expression: string): FormulaNode {
 			consume();
 			if (current().value === '(') {
 				if (!Object.hasOwn(FORMULA_FUNCTIONS, token.value)) {
-					throw new Error(`function "${token.value}" is not supported`);
+					throw new RatingFormulaError(
+						`function "${token.value}" is not supported; use abs, min, max, pow, round, floor, or ceil`,
+						token.position
+					);
 				}
 				consume('(');
 				const values: FormulaNode[] = [];
 				if (current().value !== ')') {
 					do {
-						values.push(add());
+						values.push(nested(token.position, add));
 						if (current().value !== ',') break;
 						consume(',');
 					} while (true);
 				}
 				consume(')');
-				if (values.length === 0) throw new Error(`function "${token.value}" needs arguments`);
+				const definition = FORMULA_FUNCTIONS[token.value];
+				if (
+					values.length < definition.minimumArguments ||
+					values.length > definition.maximumArguments
+				) {
+					const expected =
+						definition.minimumArguments === definition.maximumArguments
+							? `${definition.minimumArguments}`
+							: `${definition.minimumArguments} to ${definition.maximumArguments}`;
+					throw new RatingFormulaError(
+						`function "${token.value}" expects ${expected} argument${definition.maximumArguments === 1 ? '' : 's'}, but received ${values.length}`,
+						token.position
+					);
+				}
 				return { type: 'call', name: token.value, values };
 			}
-			if (!FORMULA_NAMES.has(token.value))
-				throw new Error(`variable "${token.value}" is not supported`);
-			return { type: 'variable', name: token.value as keyof FormulaContext };
+			if (!FORMULA_NAMES.has(token.value)) {
+				throw new RatingFormulaError(
+					`variable "${token.value}" is not supported; use rating, opponentRating, score, or expected`,
+					token.position
+				);
+			}
+			return { type: 'variable', name: token.value as keyof RatingFormulaContext };
 		}
-		throw new Error(`unexpected token "${token.value || 'end of formula'}"`);
+		throw new RatingFormulaError(
+			`unexpected token "${token.value || 'end of formula'}"`,
+			token.position
+		);
 	};
 	const unary = (): FormulaNode => {
 		if (current().value === '+' || current().value === '-') {
-			const operator = consume().value as '+' | '-';
-			return { type: 'unary', operator, value: unary() };
+			const token = consume();
+			return {
+				type: 'unary',
+				operator: token.value as '+' | '-',
+				value: nested(token.position, unary)
+			};
 		}
 		return primary();
 	};
 	const power = (): FormulaNode => {
 		const left = unary();
-		return current().value === '^'
-			? { type: 'binary', operator: consume().value, left, right: power() }
-			: left;
+		if (current().value !== '^') return left;
+		const token = consume();
+		return {
+			type: 'binary',
+			operator: token.value,
+			left,
+			right: nested(token.position, power)
+		};
 	};
 	const multiply = (): FormulaNode => {
 		let node = power();
@@ -435,11 +529,13 @@ function parseFormula(expression: string): FormulaNode {
 		return node;
 	};
 	const node = add();
-	if (current().type !== 'eof') throw new Error(`unexpected token "${current().value}"`);
+	if (current().type !== 'eof') {
+		throw new RatingFormulaError(`unexpected token "${current().value}"`, current().position);
+	}
 	return node;
 }
 
-function evaluateFormula(node: FormulaNode, context: FormulaContext): number {
+function evaluateFormula(node: FormulaNode, context: RatingFormulaContext): number {
 	switch (node.type) {
 		case 'number':
 			return node.value;
@@ -450,7 +546,7 @@ function evaluateFormula(node: FormulaNode, context: FormulaContext): number {
 			return node.operator === '-' ? -value : value;
 		}
 		case 'call':
-			return FORMULA_FUNCTIONS[node.name](
+			return FORMULA_FUNCTIONS[node.name].evaluate(
 				...node.values.map((value) => evaluateFormula(value, context))
 			);
 		case 'binary': {
@@ -472,20 +568,36 @@ function evaluateFormula(node: FormulaNode, context: FormulaContext): number {
 			}
 		}
 	}
-	throw new Error('invalid formula node');
+	throw new RatingFormulaError('formula contains an invalid expression');
+}
+
+export function validateRatingFormula(expression: string) {
+	parseFormula(expression);
 }
 
 export function compileRatingFormula(expression: string) {
 	const formula = parseFormula(expression);
-	const evaluate = (context: FormulaContext) => {
-		const result = evaluateFormula(formula, context);
-		if (!Number.isFinite(result) || Math.abs(result) > 1_000_000_000) {
-			throw new Error('formula result must be a finite number between -1000000000 and 1000000000');
+	const evaluate = (context: RatingFormulaContext) => {
+		for (const name of FORMULA_NAMES) {
+			const value = context?.[name as keyof RatingFormulaContext];
+			if (typeof value !== 'number' || !Number.isFinite(value)) {
+				throw new RatingFormulaError(`context variable "${name}" must be a finite number`);
+			}
 		}
-		return result;
+		const result = evaluateFormula(formula, context);
+		if (!Number.isFinite(result) || Math.abs(result) > MAX_ABSOLUTE_RATING) {
+			throw new RatingFormulaError(
+				`formula result must be a finite number between -${MAX_ABSOLUTE_RATING} and ${MAX_ABSOLUTE_RATING}`
+			);
+		}
+		return Object.is(result, -0) ? 0 : result;
 	};
 	evaluate({ rating: 1200, opponentRating: 1200, score: 1, expected: 0.5 });
 	return evaluate;
+}
+
+export function evaluateRatingFormula(expression: string, context: RatingFormulaContext) {
+	return compileRatingFormula(expression)(context);
 }
 
 function expectedScore(rating: number, opponentRating: number, scale: number) {
