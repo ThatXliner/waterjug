@@ -25,17 +25,23 @@ alter table public.game_invites enable row level security;
 
 grant select on table public.games to anon;
 grant select, insert on table public.games to authenticated;
+grant all on table public.games to service_role;
 grant usage, select on sequence public.games_game_id_seq to authenticated;
+grant all on sequence public.games_game_id_seq to service_role;
 grant select on table public.game_invites to anon;
 grant select, insert, delete on table public.game_invites to authenticated;
 grant all on table public.game_invites to service_role;
 grant select on table public.ratings to anon;
 grant select, insert, update on table public.ratings to authenticated;
+grant all on table public.ratings to service_role;
 grant select on table public.tournaments to anon;
 grant select, insert, update on table public.tournaments to authenticated;
+grant all on table public.tournaments to service_role;
 grant usage, select on sequence public.tournaments_tournament_id_seq to authenticated;
+grant all on sequence public.tournaments_tournament_id_seq to service_role;
 grant select on table public.tournament_participants to anon;
 grant select, insert on table public.tournament_participants to authenticated;
+grant all on table public.tournament_participants to service_role;
 
 drop policy "Enable insert for authenticated users only" on public.games;
 drop policy "Enable read access for all users" on public.games;
@@ -193,9 +199,9 @@ create policy "Users can add participants to accessible tournaments"
 
 create or replace function public.create_game(
 	game_name text,
-	game_rating_configuration jsonb,
 	is_invite_only boolean default false,
-	invited_emails text[] default '{}'::text[]
+	invited_emails text[] default '{}'::text[],
+	game_rating_configuration jsonb default null
 )
 returns bigint
 language plpgsql
@@ -204,13 +210,21 @@ set search_path = ''
 as $$
 declare
 	new_game_id bigint;
+	normalized_game_name text;
 	normalized_emails text[];
 begin
 	if auth.uid() is null then
 		raise exception 'Authentication required' using errcode = '42501';
 	end if;
 
-	if nullif(btrim(game_name), '') is null then
+	normalized_game_name := regexp_replace(
+		coalesce(game_name, ''),
+		'^[[:space:]]+|[[:space:]]+$',
+		'',
+		'g'
+	);
+
+	if normalized_game_name = '' then
 		raise exception 'Game name is required' using errcode = '22023';
 	end if;
 
@@ -233,9 +247,15 @@ begin
 			using errcode = '22023';
 	end if;
 
-	insert into public.games (name, created_by, invite_only, rating_configuration)
-	values (btrim(game_name), auth.uid(), is_invite_only, game_rating_configuration)
-	returning game_id into new_game_id;
+	if game_rating_configuration is null then
+		insert into public.games (name, created_by, invite_only)
+		values (normalized_game_name, auth.uid(), is_invite_only)
+		returning game_id into new_game_id;
+	else
+		insert into public.games (name, created_by, invite_only, rating_configuration)
+		values (normalized_game_name, auth.uid(), is_invite_only, game_rating_configuration)
+		returning game_id into new_game_id;
+	end if;
 
 	if is_invite_only then
 		insert into public.game_invites (game_id, invited_email, invited_by)
@@ -247,6 +267,6 @@ begin
 end;
 $$;
 
-revoke all on function public.create_game(text, jsonb, boolean, text[]) from public;
-revoke all on function public.create_game(text, jsonb, boolean, text[]) from anon;
-grant execute on function public.create_game(text, jsonb, boolean, text[]) to authenticated;
+revoke all on function public.create_game(text, boolean, text[], jsonb) from public;
+revoke all on function public.create_game(text, boolean, text[], jsonb) from anon;
+grant execute on function public.create_game(text, boolean, text[], jsonb) to authenticated;
