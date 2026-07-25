@@ -24,6 +24,8 @@
 
 	async function handleLogin(event: SubmitEvent) {
 		event.preventDefault();
+		if (submitting) return;
+
 		errorMessage = '';
 		submitting = true;
 

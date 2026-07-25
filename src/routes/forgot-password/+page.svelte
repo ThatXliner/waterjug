@@ -9,6 +9,8 @@
 
 	async function handleSubmit(event: SubmitEvent) {
 		event.preventDefault();
+		if (submitting || submitted) return;
+
 		errorMessage = '';
 		submitting = true;
 

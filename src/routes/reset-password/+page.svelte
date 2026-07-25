@@ -24,6 +24,8 @@
 
 	async function handleSubmit(event: SubmitEvent) {
 		event.preventDefault();
+		if (submitting || !hasRecoverySession) return;
+
 		errorMessage = validateNewPassword(password, confirmation) ?? '';
 		if (errorMessage) return;
 
