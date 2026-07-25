@@ -73,6 +73,10 @@ CREATE POLICY "Players can report their own results"
 
 GRANT SELECT, INSERT ON TABLE "public"."game_results" TO "authenticated";
 GRANT USAGE, SELECT ON SEQUENCE "public"."game_results_result_id_seq" TO "authenticated";
+GRANT ALL ON TABLE "public"."game_results" TO "service_role";
+GRANT ALL ON SEQUENCE "public"."game_results_result_id_seq" TO "service_role";
+GRANT ALL ON TABLE "public"."games", "public"."ratings" TO "service_role";
+GRANT ALL ON SEQUENCE "public"."games_game_id_seq" TO "service_role";
 
 CREATE OR REPLACE FUNCTION "public"."review_game_result"(
     "p_result_id" bigint,
@@ -123,14 +127,25 @@ BEGIN
         RAISE EXCEPTION 'Result not found';
     END IF;
 
-    IF result_row.status <> 'pending' THEN
-        RAISE EXCEPTION 'Result has already been reviewed';
-    END IF;
-
     IF current_user_id = result_row.reporter_id
         OR current_user_id NOT IN (result_row.winner_id, result_row.loser_id)
     THEN
         RAISE EXCEPTION 'Only the opposing player can review this result';
+    END IF;
+
+    IF result_row.status <> 'pending' THEN
+        -- A client may safely retry the same review after a timeout. The row
+        -- lock makes concurrent matching reviews converge on this no-op.
+        IF result_row.reviewer_id = current_user_id
+            AND (
+                (result_row.status = 'confirmed' AND p_decision = 'confirm')
+                OR (result_row.status = 'disputed' AND p_decision = 'dispute')
+            )
+        THEN
+            RETURN result_row;
+        END IF;
+
+        RAISE EXCEPTION 'Result has already been reviewed';
     END IF;
 
     IF p_decision = 'dispute' THEN
