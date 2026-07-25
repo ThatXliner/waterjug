@@ -25,7 +25,7 @@ jobs:
           bunx supabase db reset
       - name: Set environment variables
         run: |
-          bunx supabase status -o env | node scripts/convert_env.js > .env
+          (bunx supabase status -o env || true) | node scripts/convert_env.js > .env
           test -s .env
       - run: bun run test
   lint:
@@ -44,7 +44,7 @@ jobs:
           bunx supabase db reset
       - name: Set environment variables
         run: |
-          bunx supabase status -o env | node scripts/convert_env.js > .env
+          (bunx supabase status -o env || true) | node scripts/convert_env.js > .env
           test -s .env
       - name: Lint code style
         run: bun run lint
@@ -69,7 +69,9 @@ jobs:
           bunx supabase db reset
       - name: Verify generated types match Postgres schema
         run: |
-          bun run update-types
+          bunx supabase gen types typescript \
+            --db-url postgresql://postgres:postgres@127.0.0.1:54322/postgres \
+            > src/lib/supabase.ts
           if ! git diff --ignore-space-at-eol --exit-code --quiet src/lib/supabase.ts; then
               echo "Detected uncommitted changes after build. See status below:\n" >> $GITHUB_STEP_SUMMARY
               echo '```diff' >> $GITHUB_STEP_SUMMARY
