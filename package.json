@@ -18,7 +18,7 @@
 		"test:database:glicko": "supabase test db supabase/tests/glicko_rating_configuration.test.sql --local",
 		"test:integration": "playwright test",
 		"test:db": "supabase test db supabase/tests",
-		"test:unit": "vitest",
+		"test:unit": "vitest run",
 		"update-types": "supabase gen types --lang typescript --local > src/lib/supabase.ts && node scripts/normalize_generated_file.js src/lib/supabase.ts"
 	},
 	"devDependencies": {
