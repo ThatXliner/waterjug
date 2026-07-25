@@ -28,6 +28,28 @@ grant usage on sequence public.tournaments_tournament_id_seq to authenticated;
 
 grant insert on table public.tournament_participants to authenticated;
 
+-- Reject values that satisfy the original NOT NULL declarations but are not
+-- usable application data.
+alter table public.games
+  add constraint games_name_not_blank
+  check (length(regexp_replace(name, '[[:space:]]', '', 'g')) > 0);
+
+alter table public.tournaments
+  add constraint tournaments_name_not_blank
+  check (length(regexp_replace(name, '[[:space:]]', '', 'g')) > 0);
+
+alter table public.ratings
+  add constraint ratings_rating_finite
+  check (
+    rating not in (
+      'NaN'::double precision,
+      'Infinity'::double precision,
+      '-Infinity'::double precision
+    )
+  ),
+  add constraint ratings_other_data_is_object
+  check (json_typeof(other_data) = 'object');
+
 -- Recreate policies with explicit roles and ownership checks. In particular,
 -- callers may not create a tournament for another user or add participants to
 -- a tournament they did not create.
