@@ -46,9 +46,14 @@ export const load: PageServerLoad = async ({ params, locals: { supabase } }) => 
 	const userIds = data.map((r) => r.user_id);
 	const { data: profiles } = await supabase
 		.from('profiles')
-		.select('user_id, display_name')
+		.select('user_id, display_name, username')
 		.in('user_id', userIds);
-	const profileMap = new Map((profiles ?? []).map((p) => [p.user_id, p.display_name]));
+	const profileMap = new Map(
+		(profiles ?? []).map((profile) => [
+			profile.user_id,
+			profile.username ? `@${profile.username}` : profile.display_name
+		])
+	);
 
 	const { data: tournaments } = await supabase
 		.from('tournaments')

@@ -1,5 +1,12 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import {
+		normalizeUsername,
+		USERNAME_MAX_LENGTH,
+		USERNAME_MIN_LENGTH,
+		USERNAME_REQUIREMENTS,
+		validateUsername
+	} from '$lib/username';
 
 	let { data } = $props();
 	let supabase = $derived(data.supabase);
@@ -17,17 +24,33 @@
 
 	let email = $state('');
 	let password = $state('');
+	let username = $state('');
+	let signupError = $state('');
 
 	function handleSignUp() {
+		const normalizedUsername = normalizeUsername(username);
+		const validationError = validateUsername(normalizedUsername);
+		if (validationError) {
+			signupError = validationError;
+			return;
+		}
+		signupError = '';
+
 		supabase.auth
 			.signUp({
 				email,
 				password,
-				options: { emailRedirectTo: '/' }
+				options: {
+					emailRedirectTo: '/',
+					data: { username: normalizedUsername }
+				}
 			})
 			.then(({ error }) => {
 				if (error != null) {
-					window.alert(error);
+					signupError =
+						error.message === 'Database error saving new user'
+							? 'That username is already taken.'
+							: error.message;
 					return;
 				}
 				window.location.href = '/';
@@ -54,7 +77,31 @@
 			</p>
 		</div>
 		<div class="card flex-shrink-0 w-full max-w-sm shadow-2xl bg-base-100">
-			<form class="card-body">
+			<form
+				class="card-body"
+				onsubmit={(event) => {
+					event.preventDefault();
+					handleSignUp();
+				}}
+			>
+				<div class="form-control">
+					<label class="label" for="username-input">
+						<span class="label-text">Username</span>
+					</label>
+					<input
+						type="text"
+						placeholder="water_jug"
+						id="username-input"
+						class="input input-bordered"
+						required
+						minlength={USERNAME_MIN_LENGTH}
+						maxlength={USERNAME_MAX_LENGTH}
+						autocomplete="username"
+						aria-describedby="username-help"
+						bind:value={username}
+					/>
+					<p id="username-help" class="text-xs opacity-70 mt-1">{USERNAME_REQUIREMENTS}</p>
+				</div>
 				<div class="form-control">
 					<label class="label" for="email-input">
 						<span class="label-text">Email</span>
@@ -82,8 +129,11 @@
 					/>
 				</div>
 				<div class="form-control mt-6">
-					<button class="btn btn-primary" onclick={handleSignUp}>Sign Up</button>
+					<button class="btn btn-primary" type="submit">Sign Up</button>
 				</div>
+				{#if signupError}
+					<p class="text-error text-sm" role="alert">{signupError}</p>
+				{/if}
 			</form>
 		</div>
 	</div>

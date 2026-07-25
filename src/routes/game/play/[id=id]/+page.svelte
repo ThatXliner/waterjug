@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { closeDialog, showDialog } from '$lib/dialog';
 
 	let { data, form } = $props();
 	let dbData = $derived(data.data);
@@ -8,27 +9,27 @@
 	let profileMap = $derived(data.profileMap);
 	let tournaments = $derived(data.tournaments);
 
-	function displayName(userId: string) {
+	function displayName(userId = '') {
 		return profileMap[userId] || userId.slice(0, 8);
 	}
 
 	let sorted = $derived([...dbData].sort((a, b) => b.rating - a.rating));
-	let modal = $state<HTMLDialogElement | null>(null);
+	let modal = $state();
 	let winner = $state('');
-	let tournamentModal = $state<HTMLDialogElement | null>(null);
+	let tournamentModal = $state();
 	let tournamentForm = $state({
 		name: '',
 		type: 'bracket',
-		selectedParticipants: new Set<string>()
+		selectedParticipants: new Set()
 	});
 
 	function openModal() {
-		modal?.showModal();
+		showDialog(modal);
 	}
 	function openTournamentModal() {
-		tournamentModal?.showModal();
+		showDialog(tournamentModal);
 	}
-	function toggleParticipant(userId: string) {
+	function toggleParticipant(userId = '') {
 		if (tournamentForm.selectedParticipants.has(userId)) {
 			tournamentForm.selectedParticipants.delete(userId);
 		} else {
@@ -57,7 +58,7 @@
 				{/each}
 			</select>
 			<div class="modal-action">
-				<button class="btn" type="button" onclick={() => modal?.close()}>Close</button>
+				<button class="btn" type="button" onclick={() => closeDialog(modal)}>Close</button>
 				<button class="btn btn-primary" type="submit" disabled={!winner}>Submit</button>
 			</div>
 		</form>
@@ -74,7 +75,7 @@
 			method="POST"
 			action="?/createTournament"
 			use:enhance={() => {
-				tournamentModal?.close();
+				closeDialog(tournamentModal);
 			}}
 		>
 			<div class="form-control mb-3">
@@ -135,7 +136,8 @@
 				<p class="text-error text-sm mb-2">{form.tournamentError}</p>
 			{/if}
 			<div class="modal-action">
-				<button class="btn" type="button" onclick={() => tournamentModal?.close()}>Close</button>
+				<button class="btn" type="button" onclick={() => closeDialog(tournamentModal)}>Close</button
+				>
 				<button class="btn btn-primary" type="submit">Create</button>
 			</div>
 		</form>

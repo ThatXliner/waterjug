@@ -8,6 +8,9 @@
 <div class="flex flex-col w-full min-h-screen p-8">
 	<header class="mb-8">
 		<h1 class="text-3xl font-bold">{profile.display_name || 'Unnamed Player'}</h1>
+		{#if profile.username}
+			<p class="text-lg opacity-75">@{profile.username}</p>
+		{/if}
 		<p class="text-sm opacity-60">Joined {new Date(profile.created_at).toLocaleDateString()}</p>
 	</header>
 

@@ -1,11 +1,15 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { USERNAME_MAX_LENGTH, USERNAME_MIN_LENGTH, USERNAME_REQUIREMENTS } from '$lib/username';
 
 	let { data, form } = $props();
 	let ratings = $derived(data.ratings);
 	let displayName = $derived(data.displayName);
+	let username = $derived(data.username);
 	let editingName = $state(false);
 	let nameValue = $state('');
+	let editingUsername = $state(false);
+	let usernameValue = $state('');
 </script>
 
 <div class="flex flex-col w-full min-h-screen p-8">
@@ -18,6 +22,57 @@
 					My Games
 				{/if}
 			</h1>
+			<div class="mt-2">
+				{#if !editingUsername}
+					<div class="flex items-center gap-2">
+						{#if username}
+							<a class="link text-lg" href="/profile/{data.userId}">@{username}</a>
+						{:else}
+							<span class="text-sm opacity-70">No username set</span>
+						{/if}
+						<button
+							class="btn btn-xs btn-ghost"
+							onclick={() => {
+								editingUsername = true;
+								usernameValue = username ?? '';
+							}}
+						>
+							{username ? 'Change username' : 'Set username'}
+						</button>
+					</div>
+				{:else}
+					<form
+						method="POST"
+						action="?/setUsername"
+						use:enhance
+						class="flex flex-wrap items-center gap-2"
+					>
+						<label class="sr-only" for="username">Username</label>
+						<span aria-hidden="true">@</span>
+						<input
+							id="username"
+							type="text"
+							name="username"
+							class="input input-bordered input-sm"
+							bind:value={usernameValue}
+							required
+							minlength={USERNAME_MIN_LENGTH}
+							maxlength={USERNAME_MAX_LENGTH}
+							autocomplete="username"
+						/>
+						<button class="btn btn-sm btn-primary" type="submit">Save</button>
+						<button
+							class="btn btn-sm btn-ghost"
+							type="button"
+							onclick={() => (editingUsername = false)}>Cancel</button
+						>
+						<p class="basis-full text-xs opacity-70">{USERNAME_REQUIREMENTS}</p>
+					</form>
+				{/if}
+				{#if form?.usernameError}
+					<p class="text-error text-sm mt-1" role="alert">{form.usernameError}</p>
+				{/if}
+			</div>
 			{#if !displayName && !editingName}
 				<button
 					class="btn btn-sm btn-ghost mt-1"

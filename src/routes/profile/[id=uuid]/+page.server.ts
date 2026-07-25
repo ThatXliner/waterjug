@@ -4,7 +4,7 @@ import type { PageServerLoad } from './$types';
 export const load: PageServerLoad = async ({ params, locals: { supabase } }) => {
 	const { data: profile, error: profileErr } = await supabase
 		.from('profiles')
-		.select('display_name, created_at')
+		.select('display_name, username, created_at')
 		.eq('user_id', params.id)
 		.single();
 
