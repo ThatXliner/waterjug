@@ -3,6 +3,7 @@
 
 	let { form } = $props();
 	let system = $state('glicko');
+	let inviteOnly = $state(false);
 	onMount(() => {
 		if (form?.configurationError) window.alert(form.configurationError);
 	});
@@ -23,10 +24,10 @@
 						placeholder="Enter game name"
 						name="gameName"
 						id="gameName"
+						value={form?.name ?? ''}
 						required
 					/>
 				</div>
-
 				<div class="divider">Rating configuration</div>
 				<div class="grid gap-4 sm:grid-cols-2">
 					<label class="form-control">
@@ -180,6 +181,38 @@
 					<input type="hidden" name="customFormula" value="rating + 32 * (score - expected)" />
 				{/if}
 
+				<label class="label mt-4 cursor-pointer justify-start gap-3">
+					<input
+						class="checkbox checkbox-primary"
+						type="checkbox"
+						name="inviteOnly"
+						bind:checked={inviteOnly}
+					/>
+					<span class="label-text">Invite-only game</span>
+				</label>
+				{#if inviteOnly}
+					<div class="form-control mt-3">
+						<label class="label" for="invitedEmails">
+							<span class="label-text">Invited players</span>
+						</label>
+						<textarea
+							class="textarea textarea-bordered"
+							name="invitedEmails"
+							id="invitedEmails"
+							placeholder="player@example.com, teammate@example.com"
+							aria-describedby="inviteHelp"
+							required
+						></textarea>
+						<p id="inviteHelp" class="label-text-alt mt-1 text-left">
+							Enter email addresses separated by commas, spaces, or new lines.
+						</p>
+					</div>
+				{/if}
+				{#if form?.message}
+					<div class="alert alert-error mt-4" role="alert">
+						<span>{form.message}</span>
+					</div>
+				{/if}
 				{#if form?.configurationError}
 					<p class="text-error text-sm">{form.configurationError}</p>
 				{/if}

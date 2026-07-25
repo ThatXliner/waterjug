@@ -34,11 +34,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      game_invites: {
+        Row: {
+          created_at: string
+          game_id: number
+          invited_by: string
+          invited_email: string
+        }
+        Insert: {
+          created_at?: string
+          game_id: number
+          invited_by: string
+          invited_email: string
+        }
+        Update: {
+          created_at?: string
+          game_id?: number
+          invited_by?: string
+          invited_email?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_invites_game_creator_fkey"
+            columns: ["game_id", "invited_by"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["game_id", "created_by"]
+          },
+          {
+            foreignKeyName: "game_invites_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["game_id"]
+          },
+        ]
+      }
       games: {
         Row: {
           created_at: string
           created_by: string | null
           game_id: number
+          invite_only: boolean
           name: string
           rating_configuration: Json
           rating_configuration_revision: number
@@ -47,6 +84,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           game_id?: number
+          invite_only?: boolean
           name: string
           rating_configuration?: Json
           rating_configuration_revision?: number
@@ -55,6 +93,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           game_id?: number
+          invite_only?: boolean
           name?: string
           rating_configuration?: Json
           rating_configuration_revision?: number
@@ -210,6 +249,15 @@ export type Database = {
         Returns: boolean
       }
       ensure_game_rating: { Args: { p_game_id: number }; Returns: undefined }
+      create_game: {
+        Args: {
+          game_name: string
+          game_rating_configuration: Json
+          invited_emails?: string[]
+          is_invite_only?: boolean
+        }
+        Returns: number
+      }
     }
     Enums: {
       app_role: "player" | "admin"

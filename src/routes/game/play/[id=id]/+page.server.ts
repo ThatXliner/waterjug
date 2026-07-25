@@ -19,6 +19,37 @@ import {
 
 const MAX_RESULT_UPDATE_ATTEMPTS = 3;
 
+async function requireGameAccess(supabase: SupabaseClient<Database>, gameId: number) {
+	const { data: game, error: accessError } = await supabase
+		.from('games')
+		.select(
+			'name, invite_only, created_by, rating_configuration, rating_configuration_revision'
+		)
+		.eq('game_id', gameId)
+		.maybeSingle();
+
+	if (accessError) {
+		error(500, 'The game could not be loaded.');
+	}
+	if (game) {
+		return game;
+	}
+
+	const { data: restrictedGame, error: lookupError } = await getPrivilegedSupabase()
+		.from('games')
+		.select('invite_only')
+		.eq('game_id', gameId)
+		.maybeSingle();
+	if (lookupError) {
+		error(500, 'The game could not be loaded.');
+	}
+	if (restrictedGame?.invite_only) {
+		error(403, 'This game is invite-only. Ask the game creator to invite your account email.');
+	}
+
+	error(404, 'Game not found.');
+}
+
 async function fetchRatings(supabase: SupabaseClient<Database>, game_id: number) {
 	const res = await supabase
 		.from('ratings')
@@ -35,17 +66,10 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const { supabase } = locals;
 	const user = requireUser(locals).id;
 	const gameId = parseInt(params.id);
-	const { data: gameData, error: err } = await supabase
-		.from('games')
-		.select('name, created_by, rating_configuration, rating_configuration_revision')
-		.eq('game_id', gameId)
-		.single();
-	if (err != null) {
-		error(500, err);
-	}
+	const game = await requireGameAccess(supabase, gameId);
 	let configuration: RatingConfiguration;
 	try {
-		configuration = parseRatingConfiguration(gameData.rating_configuration);
+		configuration = parseRatingConfiguration(game.rating_configuration);
 	} catch (configurationError) {
 		error(
 			500,
@@ -57,11 +81,13 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	let data = await fetchRatings(supabase, gameId).catch((err) => {
 		error(500, err);
 	});
-	if (data.filter((x: { user_id: string }) => x.user_id == user).length == 0) {
-		const { error: insertError } = await supabase.rpc('ensure_game_rating', {
+	if (!data.some((rating) => rating.user_id === user)) {
+		const { error: joinError } = await supabase.rpc('ensure_game_rating', {
 			p_game_id: gameId
 		});
-		if (insertError) error(500, insertError);
+		if (joinError) {
+			error(500, joinError);
+		}
 		data = await fetchRatings(supabase, gameId).catch((err) => {
 			error(500, err);
 		});
@@ -87,11 +113,12 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 	return {
 		data,
-		gameName: gameData.name,
+		gameName: game.name,
+		inviteOnly: game.invite_only,
 		user,
 		configuration,
-		configurationRevision: gameData.rating_configuration_revision,
-		isOwner: gameData.created_by === user,
+		configurationRevision: game.rating_configuration_revision,
+		isOwner: game.created_by === user,
 		profileMap: Object.fromEntries(profileMap),
 		tournaments: tournaments ?? []
 	};
@@ -141,6 +168,7 @@ export const actions: Actions = {
 			return fail(400, { resultError: 'Select another player as the winner' });
 		}
 		const gameId = parseInt(params.id);
+		await requireGameAccess(locals.supabase, gameId);
 		const privilegedSupabase = getPrivilegedSupabase();
 
 		for (let attempt = 0; attempt < MAX_RESULT_UPDATE_ATTEMPTS; attempt += 1) {
@@ -199,6 +227,8 @@ export const actions: Actions = {
 		const user = requireUser(locals);
 		const { supabase } = locals;
 
+		const gameId = parseInt(params.id);
+		await requireGameAccess(supabase, gameId);
 		const formData = await request.formData();
 		const name = formData.get('name')?.toString().trim();
 		const type = formData.get('type')?.toString();
@@ -210,7 +240,6 @@ export const actions: Actions = {
 		if (participants.length < 2)
 			return fail(400, { tournamentError: 'Select at least 2 participants' });
 
-		const gameId = parseInt(params.id);
 		const { data: tournament, error: insertErr } = await supabase
 			.from('tournaments')
 			.insert({ game_id: gameId, name, type, created_by: user.id, status: 'pending' })

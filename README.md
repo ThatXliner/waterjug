@@ -141,7 +141,7 @@ supabase/
 - [x] Bracket and round-robin tournament creation
 - [ ] Playable tournament brackets and round-robin scheduling
 - [ ] Peer-verified results
-- [ ] Invite-only games
+- [x] Invite-only games
 - [ ] Rating history, predictions, and analytics
 - [ ] Real-time leaderboard updates
 - [x] Configurable rating systems
