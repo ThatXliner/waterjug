@@ -13,7 +13,7 @@
 		"format": "prettier --plugin-search-dir . --write .",
 		"test:integration": "playwright test",
 		"test:unit": "vitest",
-		"update-types": "supabase gen types typescript --local > src/lib/supabase.ts"
+		"update-types": "supabase gen types typescript --local | sed '${/^$/d;}' > src/lib/supabase.ts"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
