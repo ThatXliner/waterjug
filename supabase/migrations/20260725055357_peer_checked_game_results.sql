@@ -71,6 +71,8 @@ CREATE POLICY "Players can report their own results"
         AND "reviewed_at" IS NULL
     );
 
+REVOKE ALL ON TABLE "public"."game_results" FROM "anon", "authenticated";
+REVOKE ALL ON SEQUENCE "public"."game_results_result_id_seq" FROM "anon", "authenticated";
 GRANT SELECT, INSERT ON TABLE "public"."game_results" TO "authenticated";
 GRANT USAGE, SELECT ON SEQUENCE "public"."game_results_result_id_seq" TO "authenticated";
 GRANT ALL ON TABLE "public"."game_results" TO "service_role";
@@ -270,5 +272,5 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION "public"."review_game_result"(bigint, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION "public"."review_game_result"(bigint, text) FROM PUBLIC, "anon", "authenticated";
 GRANT EXECUTE ON FUNCTION "public"."review_game_result"(bigint, text) TO "authenticated";
