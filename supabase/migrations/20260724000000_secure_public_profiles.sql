@@ -3,6 +3,11 @@ ALTER TABLE "public"."profiles"
     CHECK (char_length("display_name") <= 50)
     NOT VALID;
 
+ALTER TABLE "public"."profiles"
+    ADD CONSTRAINT "profiles_display_name_no_control_characters"
+    CHECK ("display_name" !~ '[[:cntrl:]]')
+    NOT VALID;
+
 DROP POLICY IF EXISTS "Enable read access for own profile" ON "public"."profiles";
 DROP POLICY IF EXISTS "Enable update for own profile" ON "public"."profiles";
 
