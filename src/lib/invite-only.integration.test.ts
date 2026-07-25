@@ -2,9 +2,14 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from './supabase';
 
-const apiUrl = process.env.PUBLIC_SUPABASE_URL;
-const anonKey = process.env.PUBLIC_SUPABASE_ANON_KEY;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const environment = (
+	globalThis as typeof globalThis & {
+		process?: { env?: Record<string, string | undefined> };
+	}
+).process?.env;
+const apiUrl = environment?.PUBLIC_SUPABASE_URL;
+const anonKey = environment?.PUBLIC_SUPABASE_ANON_KEY;
+const serviceRoleKey = environment?.SUPABASE_SERVICE_ROLE_KEY;
 const hasSupabaseEnvironment = Boolean(apiUrl && anonKey && serviceRoleKey);
 
 describe.skipIf(!hasSupabaseEnvironment)('invite-only games through the Data API', () => {
