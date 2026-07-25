@@ -1,5 +1,7 @@
 ALTER TABLE "public"."games"
     ADD COLUMN "created_by" uuid REFERENCES "auth"."users"("id") ON DELETE SET NULL,
+    ADD COLUMN "rating_configuration_revision" bigint NOT NULL DEFAULT 1
+        CHECK ("rating_configuration_revision" > 0),
     ADD COLUMN "rating_configuration" jsonb NOT NULL DEFAULT '{
       "version": 1,
       "system": "glicko",

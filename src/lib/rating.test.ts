@@ -82,4 +82,39 @@ describe('configured calculations', () => {
 		expect(calculateRating(config, { rating: 1200 }, { rating: 1200 }, 1).rating).toBe(1210);
 		expect(calculateRating(config, { rating: 1200 }, { rating: 1200 }, 0).rating).toBe(1190);
 	});
+
+	test('normalizes negative zero for stable JSON persistence', () => {
+		const config = parseRatingConfiguration({
+			system: 'custom',
+			custom: { formula: 'round(rating)' }
+		});
+		const result = calculateRating(config, { rating: -Number.MIN_VALUE }, { rating: 0 }, 0.5);
+		expect(Object.is(result.rating, -0)).toBe(false);
+		expect(JSON.parse(JSON.stringify(result))).toEqual(result);
+	});
+
+	test('never leaks beyond the configured Glicko deviation maximum', () => {
+		const config = parseRatingConfiguration({
+			system: 'glicko',
+			periodDays: 1 / 24,
+			glicko: {
+				initialDeviation: 1,
+				maxDeviation: 963,
+				periodDeviationIncrease: 0,
+				scale: 1
+			}
+		});
+		const result = calculateRating(
+			config,
+			{
+				rating: -36.009751762637265,
+				deviation: 963,
+				lastRatedAt: '2000-01-01T00:00:00.000Z'
+			},
+			{ rating: 0, deviation: 1 },
+			0,
+			new Date('2026-07-24T00:00:00.000Z')
+		);
+		expect(result.deviation).toBeLessThanOrEqual(963);
+	});
 });

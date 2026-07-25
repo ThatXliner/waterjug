@@ -8,6 +8,7 @@
 	let profileMap = $derived(data.profileMap);
 	let tournaments = $derived(data.tournaments);
 	let configuration = $derived(data.configuration);
+	let configurationRevision = $derived(data.configurationRevision);
 	let isOwner = $derived(data.isOwner);
 
 	/** @param {string} userId */
@@ -162,6 +163,7 @@
 	<div class="modal-box max-w-2xl">
 		<h3 class="font-bold text-lg mb-4">Rating configuration</h3>
 		<form method="POST" action="?/configure" class="space-y-4">
+			<input type="hidden" name="configurationRevision" value={configurationRevision} />
 			<div class="grid gap-4 sm:grid-cols-3">
 				<label class="form-control">
 					<span class="label-text">System</span>

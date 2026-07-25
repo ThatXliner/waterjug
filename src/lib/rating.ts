@@ -53,6 +53,20 @@ export class RatingConfigurationError extends Error {
 	}
 }
 
+export class RatingCalculationError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = 'RatingCalculationError';
+	}
+}
+
+export class RatingConfigurationConflictError extends Error {
+	constructor(message = 'Rating configuration changed since it was loaded. Reload and try again.') {
+		super(message);
+		this.name = 'RatingConfigurationConflictError';
+	}
+}
+
 function record(value: unknown): Record<string, unknown> {
 	return value !== null && typeof value === 'object' && !Array.isArray(value)
 		? (value as Record<string, unknown>)
@@ -207,6 +221,52 @@ export function parseRatingConfigurationForm(formData: FormData) {
 		},
 		custom: { formula: formData.get('customFormula')?.toString() }
 	});
+}
+
+export function parseRatingConfigurationRevision(value: unknown) {
+	const revision = typeof value === 'string' && value.trim() !== '' ? Number(value) : value;
+	if (
+		typeof revision !== 'number' ||
+		!Number.isSafeInteger(revision) ||
+		revision < 1 ||
+		revision >= Number.MAX_SAFE_INTEGER
+	) {
+		throw new RatingConfigurationError([
+			`configurationRevision must be a safe integer between 1 and ${Number.MAX_SAFE_INTEGER - 1}`
+		]);
+	}
+	return revision;
+}
+
+export function nextRatingConfigurationRevision(expectedRevision: unknown) {
+	return parseRatingConfigurationRevision(expectedRevision) + 1;
+}
+
+export type RatingConfigurationStore = {
+	compareAndSet(
+		expectedRevision: number,
+		nextRevision: number,
+		configuration: RatingConfiguration
+	): Promise<boolean>;
+};
+
+/**
+ * Persist configuration with optimistic concurrency. Storage implementations
+ * must compare and update atomically; a stale writer receives a conflict rather
+ * than silently replacing a newer configuration.
+ */
+export async function commitRatingConfiguration(
+	store: RatingConfigurationStore,
+	expectedRevisionValue: unknown,
+	configurationValue: unknown
+) {
+	const expectedRevision = parseRatingConfigurationRevision(expectedRevisionValue);
+	const configuration = parseRatingConfiguration(configurationValue);
+	const nextRevision = nextRatingConfigurationRevision(expectedRevision);
+	if (!(await store.compareAndSet(expectedRevision, nextRevision, configuration))) {
+		throw new RatingConfigurationConflictError();
+	}
+	return { configuration, revision: nextRevision };
 }
 
 type FormulaContext = {
@@ -436,8 +496,125 @@ function glickoRating(
 	const precision = 1 / square(deviation) + 1 / variance;
 	return {
 		rating: player.rating + (q / precision) * impact * (score - expected),
-		deviation: Math.sqrt(1 / precision),
+		deviation: Math.min(Math.sqrt(1 / precision), parameters.maxDeviation),
 		lastRatedAt: now.toISOString()
+	};
+}
+
+function validateRatingState(value: RatingState, name: string): RatingState {
+	if (
+		typeof value?.rating !== 'number' ||
+		!Number.isFinite(value.rating) ||
+		Math.abs(value.rating) > 1_000_000_000
+	) {
+		throw new RatingCalculationError(
+			`${name}.rating must be a finite number between -1000000000 and 1000000000`
+		);
+	}
+	if (
+		value.deviation !== undefined &&
+		(typeof value.deviation !== 'number' ||
+			!Number.isFinite(value.deviation) ||
+			value.deviation <= 0 ||
+			value.deviation > 1_000_000_000)
+	) {
+		throw new RatingCalculationError(
+			`${name}.deviation must be a finite number greater than 0 and at most 1000000000`
+		);
+	}
+	if (value.lastRatedAt !== undefined && !Number.isFinite(new Date(value.lastRatedAt).getTime())) {
+		throw new RatingCalculationError(`${name}.lastRatedAt must be a valid date`);
+	}
+	return { ...value };
+}
+
+function validateCalculationTime(now: Date) {
+	if (!(now instanceof Date) || !Number.isFinite(now.getTime())) {
+		throw new RatingCalculationError('now must be a valid date');
+	}
+}
+
+function validateScore(score: number): asserts score is 0 | 0.5 | 1 {
+	if (score !== 0 && score !== 0.5 && score !== 1) {
+		throw new RatingCalculationError('score must be 0, 0.5, or 1');
+	}
+}
+
+function validateCalculatedState(state: RatingState) {
+	const validated = validateRatingState(state, 'result');
+	return {
+		...validated,
+		rating: Object.is(validated.rating, -0) ? 0 : validated.rating
+	};
+}
+
+function calculateWithConfiguration(
+	config: RatingConfiguration,
+	playerValue: RatingState,
+	opponentValue: RatingState,
+	scoreValue: number,
+	now: Date,
+	customFormula?: ReturnType<typeof compileRatingFormula>
+) {
+	const player = validateRatingState(playerValue, 'player');
+	const opponent = validateRatingState(opponentValue, 'opponent');
+	validateScore(scoreValue);
+	validateCalculationTime(now);
+	const score = scoreValue;
+	if (config.system === 'glicko') return glickoRating(config, player, opponent, score, now);
+	const scale = config.system === 'elo' ? config.elo.scale : DEFAULT_RATING_CONFIGURATION.elo.scale;
+	const expected = expectedScore(player.rating, opponent.rating, scale);
+	let rating = player.rating + config.elo.kFactor * (score - expected);
+	if (config.system === 'custom') {
+		try {
+			rating = (customFormula ?? compileRatingFormula(config.custom.formula))({
+				rating: player.rating,
+				opponentRating: opponent.rating,
+				score,
+				expected
+			});
+		} catch (error) {
+			throw new RatingCalculationError(
+				`custom formula failed: ${error instanceof Error ? error.message : 'unknown error'}`
+			);
+		}
+	}
+	return validateCalculatedState({ rating, lastRatedAt: now.toISOString() });
+}
+
+/**
+ * Capture an immutable configuration snapshot for a unit of rating work. A match
+ * therefore cannot mix algorithms or parameters when its persisted configuration
+ * is updated concurrently.
+ */
+export function createRatingCalculator(configuration: RatingConfiguration) {
+	const config = parseRatingConfiguration(configuration);
+	const customFormula =
+		config.system === 'custom' ? compileRatingFormula(config.custom.formula) : undefined;
+	const calculate = (
+		player: RatingState,
+		opponent: RatingState,
+		score: 0 | 0.5 | 1,
+		now = new Date()
+	) =>
+		validateCalculatedState(
+			calculateWithConfiguration(config, player, opponent, score, now, customFormula)
+		);
+	return {
+		calculate,
+		calculateMatch(
+			player: RatingState,
+			opponent: RatingState,
+			playerScore: 0 | 0.5 | 1,
+			now = new Date()
+		) {
+			validateScore(playerScore);
+			const opponentScore = (1 - playerScore) as 0 | 0.5 | 1;
+			return {
+				player: calculate(player, opponent, playerScore, now),
+				opponent: calculate(opponent, player, opponentScore, now)
+			};
+		}
 	};
 }
 
@@ -448,18 +625,5 @@ export function calculateRating(
 	score: 0 | 0.5 | 1,
 	now = new Date()
 ): RatingState {
-	const config = parseRatingConfiguration(configuration);
-	if (config.system === 'glicko') return glickoRating(config, player, opponent, score, now);
-	const scale = config.system === 'elo' ? config.elo.scale : DEFAULT_RATING_CONFIGURATION.elo.scale;
-	const expected = expectedScore(player.rating, opponent.rating, scale);
-	const rating =
-		config.system === 'elo'
-			? player.rating + config.elo.kFactor * (score - expected)
-			: compileRatingFormula(config.custom.formula)({
-					rating: player.rating,
-					opponentRating: opponent.rating,
-					score,
-					expected
-				});
-	return { rating, lastRatedAt: now.toISOString() };
+	return createRatingCalculator(configuration).calculate(player, opponent, score, now);
 }

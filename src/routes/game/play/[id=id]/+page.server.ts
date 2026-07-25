@@ -5,9 +5,12 @@ import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
 import type { Database } from '$lib/supabase';
 import {
-	calculateRating,
+	commitRatingConfiguration,
+	createRatingCalculator,
 	parseRatingConfiguration,
 	parseRatingConfigurationForm,
+	parseRatingConfigurationRevision,
+	RatingConfigurationConflictError,
 	RatingConfigurationError,
 	type RatingConfiguration,
 	type RatingState
@@ -29,7 +32,7 @@ export const load: PageServerLoad = async ({ params, locals: { supabase } }) => 
 	const gameId = parseInt(params.id);
 	const { data: gameData, error: err } = await supabase
 		.from('games')
-		.select('name, created_by, rating_configuration')
+		.select('name, created_by, rating_configuration, rating_configuration_revision')
 		.eq('game_id', gameId)
 		.single();
 	if (err != null) {
@@ -88,6 +91,7 @@ export const load: PageServerLoad = async ({ params, locals: { supabase } }) => 
 		gameName: gameData.name,
 		user,
 		configuration,
+		configurationRevision: gameData.rating_configuration_revision,
 		isOwner: gameData.created_by === user,
 		profileMap: Object.fromEntries(profileMap),
 		tournaments: tournaments ?? []
@@ -146,8 +150,9 @@ export const actions: Actions = {
 		const oldYou = await getRatingFor(supabaseServer, gameId, user, configuration);
 		const oldThem = await getRatingFor(supabaseServer, gameId, winner, configuration);
 		const now = new Date();
-		const newYou = calculateRating(configuration, oldYou, oldThem, 0, now);
-		const newThem = calculateRating(configuration, oldThem, oldYou, 1, now);
+		const match = createRatingCalculator(configuration).calculateMatch(oldYou, oldThem, 0, now);
+		const newYou = match.player;
+		const newThem = match.opponent;
 		{
 			const { error } = await supabaseServer
 				.from('ratings')
@@ -222,8 +227,10 @@ export const actions: Actions = {
 		if (!user) error(401, 'No user');
 		const formData = await request.formData();
 		let configuration;
+		let expectedRevision;
 		try {
 			configuration = parseRatingConfigurationForm(formData);
+			expectedRevision = parseRatingConfigurationRevision(formData.get('configurationRevision'));
 		} catch (configurationError) {
 			return fail(400, {
 				configurationError:
@@ -240,11 +247,38 @@ export const actions: Actions = {
 		if (fetchError) return fail(500, { configurationError: fetchError.message });
 		if (existing.created_by !== user.id)
 			error(403, 'Only the game owner can change rating settings');
-		const { error: updateError } = await supabase
-			.from('games')
-			.update({ rating_configuration: configuration })
-			.eq('game_id', parseInt(params.id));
-		if (updateError) return fail(500, { configurationError: updateError.message });
+		try {
+			await commitRatingConfiguration(
+				{
+					compareAndSet: async (currentRevision, nextRevision, nextConfiguration) => {
+						const { data: updated, error: updateError } = await supabase
+							.from('games')
+							.update({
+								rating_configuration: nextConfiguration,
+								rating_configuration_revision: nextRevision
+							})
+							.eq('game_id', parseInt(params.id))
+							.eq('rating_configuration_revision', currentRevision)
+							.select('rating_configuration_revision')
+							.maybeSingle();
+						if (updateError) throw updateError;
+						return updated !== null;
+					}
+				},
+				expectedRevision,
+				configuration
+			);
+		} catch (configurationError) {
+			if (configurationError instanceof RatingConfigurationConflictError) {
+				return fail(409, { configurationError: configurationError.message });
+			}
+			return fail(500, {
+				configurationError:
+					configurationError instanceof Error
+						? configurationError.message
+						: 'Could not update rating configuration.'
+			});
+		}
 		return { configurationSuccess: true };
 	}
 };

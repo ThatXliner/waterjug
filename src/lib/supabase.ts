@@ -41,6 +41,7 @@ export type Database = {
           game_id: number
           name: string
           rating_configuration: Json
+          rating_configuration_revision: number
         }
         Insert: {
           created_at?: string
@@ -48,6 +49,7 @@ export type Database = {
           game_id?: number
           name: string
           rating_configuration?: Json
+          rating_configuration_revision?: number
         }
         Update: {
           created_at?: string
@@ -55,6 +57,7 @@ export type Database = {
           game_id?: number
           name?: string
           rating_configuration?: Json
+          rating_configuration_revision?: number
         }
         Relationships: []
       }
