@@ -29,3 +29,6 @@ $$;
 
 COMMENT ON COLUMN "public"."profiles"."username" IS
     'Optional public username. Stored lowercase and unique case-insensitively.';
+
+GRANT SELECT ON TABLE "public"."profiles" TO "anon", "authenticated", "service_role";
+GRANT UPDATE ON TABLE "public"."profiles" TO "authenticated", "service_role";
