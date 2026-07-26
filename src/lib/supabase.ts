@@ -189,7 +189,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      ensure_game_rating: { Args: { p_game_id: number }; Returns: undefined }
       apply_rating_result: {
         Args: {
           p_expected_configuration_revision: number
@@ -210,6 +209,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      ensure_game_rating: { Args: { p_game_id: number }; Returns: undefined }
     }
     Enums: {
       app_role: "player" | "admin"

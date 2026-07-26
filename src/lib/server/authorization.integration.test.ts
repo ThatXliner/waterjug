@@ -5,7 +5,8 @@ import type { Database } from '$lib/supabase';
 const url = process.env.PUBLIC_SUPABASE_URL ?? '';
 const anonKey = process.env.PUBLIC_SUPABASE_ANON_KEY ?? '';
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
-const hasDatabase = Boolean(url && anonKey && serviceRoleKey);
+const hasDatabase =
+	process.env.RUN_DATABASE_TESTS === 'true' && Boolean(url && anonKey && serviceRoleKey);
 const databaseDescribe = hasDatabase ? describe : describe.skip;
 
 function publicClient(): SupabaseClient<Database> {
