@@ -9,7 +9,7 @@
 		"dev": "vite dev",
 		"build": "vite build",
 		"preview": "vite preview",
-		"test": "bun run test:integration && bun run test:unit",
+		"test": "bun run test:db && bun run test:integration && bun run test:unit",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"lint": "prettier --check . && eslint .",
@@ -17,6 +17,7 @@
 		"test:database:authorization": "supabase test db supabase/tests/authorization_privileges.test.sql --local",
 		"test:database:glicko": "supabase test db supabase/tests/glicko_rating_configuration.test.sql --local",
 		"test:integration": "playwright test",
+		"test:db": "supabase test db supabase/tests",
 		"test:unit": "vitest",
 		"update-types": "supabase gen types --lang typescript --local > src/lib/supabase.ts && node scripts/normalize_generated_file.js src/lib/supabase.ts"
 	},

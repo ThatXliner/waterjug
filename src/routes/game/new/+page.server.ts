@@ -1,5 +1,6 @@
 import { redirect, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import { parseInviteEmails } from '$lib/invites';
 import { parseRatingConfigurationForm, RatingConfigurationError } from '$lib/rating';
 import { requireRole } from '$lib/server/auth';
 
@@ -9,29 +10,53 @@ export const load: PageServerLoad = ({ locals }) => {
 
 export const actions: Actions = {
 	create: async ({ request, locals }) => {
-		const user = requireRole(locals, 'admin');
+		requireRole(locals, 'admin');
 		const formData = await request.formData();
-		const name = formData.get('gameName')?.toString().trim();
-		if (!name) return fail(400, { configurationError: 'Game name is required.' });
+		const name = formData.get('gameName')?.toString().trim() ?? '';
+		const inviteOnly = formData.get('inviteOnly') === 'on';
+		const invites = parseInviteEmails(formData.get('invitedEmails'));
+
+		if (!name) {
+			return fail(400, { message: 'Game name is required.', name, inviteOnly });
+		}
+		if (invites.error) {
+			return fail(400, { message: invites.error, name, inviteOnly });
+		}
+		if (inviteOnly && invites.emails.length === 0) {
+			return fail(400, {
+				message: 'Add at least one email address for an invite-only game.',
+				name,
+				inviteOnly
+			});
+		}
+
 		let ratingConfiguration;
 		try {
 			ratingConfiguration = parseRatingConfigurationForm(formData);
-		} catch (error) {
+		} catch (configurationError) {
 			return fail(400, {
 				configurationError:
-					error instanceof RatingConfigurationError
-						? error.message
-						: 'Invalid rating configuration.'
+					configurationError instanceof RatingConfigurationError
+						? configurationError.message
+						: 'Invalid rating configuration.',
+				name,
+				inviteOnly
 			});
 		}
-		const { data, error } = await locals.supabase
-			.from('games')
-			.insert([{ name, created_by: user.id, rating_configuration: ratingConfiguration }])
-			.select('game_id')
-			.single();
-		if (error != null) {
-			return fail(400, { configurationError: error.message });
+		const { data: gameId, error: createError } = await locals.supabase.rpc('create_game', {
+			game_name: name,
+			game_rating_configuration: ratingConfiguration,
+			is_invite_only: inviteOnly,
+			invited_emails: invites.emails
+		});
+		if (createError) {
+			const message =
+				createError.code === '23505'
+					? 'A game with that name already exists.'
+					: 'The game could not be created. Please try again.';
+			return fail(400, { message, name, inviteOnly });
 		}
-		redirect(303, `/game/play/${data.game_id}`);
+
+		redirect(303, `/game/play/${gameId}`);
 	}
 };

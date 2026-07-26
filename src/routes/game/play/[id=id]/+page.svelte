@@ -5,6 +5,7 @@
 	let { data, form } = $props();
 	let dbData = $derived(data.data);
 	let name = $derived(data.gameName);
+	let inviteOnly = $derived(data.inviteOnly);
 	let me = $derived(data.user);
 	let profileMap = $derived(data.profileMap);
 	let tournaments = $derived(data.tournaments);
@@ -313,7 +314,12 @@
 
 <main class="m-3 flex-col space-y-5">
 	<div class="flex justify-evenly">
-		<h3 class="text-5xl">{name}</h3>
+		<div class="flex items-center gap-3">
+			<h3 class="text-5xl">{name}</h3>
+			{#if inviteOnly}
+				<span class="badge badge-secondary">Invite only</span>
+			{/if}
+		</div>
 		<div class="flex gap-2">
 			<button class="btn btn-primary" onclick={openModal}>Add a result</button>
 			<button class="btn btn-secondary" onclick={openTournamentModal}>Create Tournament</button>
