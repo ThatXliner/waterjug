@@ -168,6 +168,11 @@ existing player ratings. New players receive the configured starting rating.
   `ceil`. Formulas are parsed by a restricted expression evaluator; JavaScript access, property
   access, assignment, and other functions are not supported.
 
+Glicko configuration accepts initial and maximum deviations from `1` to `1000`, deviation
+increase from `0` to `1000`, and a scale from `1` to `10000`. Its deviation calculations use
+overflow- and underflow-resistant formulas so legacy edge-case states remain finite without
+changing ordinary default behavior.
+
 ## Contributing
 
 WaterJug is young, opinionated, and open to improvement. Before opening a pull request:
