@@ -31,6 +31,8 @@ jobs:
           bunx supabase db reset
           bunx supabase migration up --local
       - run: bun run test
+      - name: Test Glicko database constraints
+        run: bun run test:database:glicko
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -41,16 +43,12 @@ jobs:
           bun-version: latest
       - name: Install dependencies
         run: bun install
-      - name: Start database
-        run: |
-          bunx supabase start
-          bunx supabase db reset
-          bunx supabase migration up --local
       - name: Lint code style
         run: bun run lint
       - name: Check types
         run: bun run check
   compare-remote-db:
+    needs: test
     runs-on: ubuntu-latest
     env:
       # Setting an environment variable with the value of a configuration variable

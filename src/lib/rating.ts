@@ -509,11 +509,11 @@ function glickoRating(
 	const parameters = config.glicko;
 	const q = Math.log(10) / parameters.scale;
 	const square = (value: number) => value * value;
+	const inactivePeriods = periodsSince(player.lastRatedAt, now, config.periodDays);
 	const deviation = Math.min(
-		Math.sqrt(
-			square(player.deviation ?? parameters.initialDeviation) +
-				periodsSince(player.lastRatedAt, now, config.periodDays) *
-					square(parameters.periodDeviationIncrease)
+		Math.hypot(
+			player.deviation ?? parameters.initialDeviation,
+			Math.sqrt(inactivePeriods) * parameters.periodDeviationIncrease
 		),
 		parameters.maxDeviation
 	);
@@ -525,7 +525,10 @@ function glickoRating(
 	const precision = 1 / square(deviation) + 1 / variance;
 	return {
 		rating: player.rating + (q / precision) * impact * (score - expected),
-		deviation: Math.min(Math.sqrt(1 / precision), parameters.maxDeviation),
+		deviation: Math.min(
+			deviation / Math.sqrt(1 + square(deviation) / variance),
+			parameters.maxDeviation
+		),
 		lastRatedAt: now.toISOString()
 	};
 }

@@ -411,6 +411,139 @@ describe('rating calculation properties', () => {
 		);
 	});
 
+	test('subnormal Glicko deviations remain stable when period growth is disabled', () => {
+		const configuration = parseRatingConfiguration({
+			system: 'glicko',
+			glicko: {
+				initialDeviation: 1,
+				maxDeviation: 350,
+				periodDeviationIncrease: 0,
+				scale: 400
+			}
+		});
+		const result = calculateRating(
+			configuration,
+			{ rating: 0, deviation: Number.MIN_VALUE },
+			{ rating: 0, deviation: 1 },
+			0.5,
+			calculationTime
+		);
+
+		expect(result.rating).toBe(0);
+		expect(result.deviation).toBe(Number.MIN_VALUE);
+	});
+
+	test('Glicko rating and deviation changes are monotonic across outcomes', () => {
+		fc.assert(
+			fc.property(
+				validConfiguration,
+				ratingState,
+				ratingState,
+				(configuration, player, opponent) => {
+					const glicko = parseRatingConfiguration({ ...configuration, system: 'glicko' });
+					const loss = calculateRating(glicko, player, opponent, 0, calculationTime);
+					const draw = calculateRating(glicko, player, opponent, 0.5, calculationTime);
+					const win = calculateRating(glicko, player, opponent, 1, calculationTime);
+
+					expect(loss.rating).toBeLessThanOrEqual(draw.rating);
+					expect(draw.rating).toBeLessThanOrEqual(win.rating);
+					expect(loss.deviation).toBe(win.deviation);
+					expect(draw.deviation).toBe(win.deviation);
+				}
+			),
+			{ numRuns: 1000 }
+		);
+	});
+
+	test('more inactive Glicko periods cannot reduce the next update magnitude or deviation', () => {
+		fc.assert(
+			fc.property(
+				validConfiguration,
+				fc.double({ min: -1_000_000, max: 1_000_000, noNaN: true, noDefaultInfinity: true }),
+				fc.double({ min: 1, max: 1000, noNaN: true, noDefaultInfinity: true }),
+				outcome,
+				(configuration, rating, deviation, score) => {
+					const glicko = parseRatingConfiguration({
+						...configuration,
+						system: 'glicko',
+						periodDays: 1,
+						glicko: {
+							...configuration.glicko,
+							periodDeviationIncrease: Math.max(1, configuration.glicko.periodDeviationIncrease)
+						}
+					});
+					const opponent = { rating: rating + 100, deviation: 100 };
+					const recent = calculateRating(
+						glicko,
+						{
+							rating,
+							deviation,
+							lastRatedAt: '2026-07-23T23:59:59.000Z'
+						},
+						opponent,
+						score,
+						calculationTime
+					);
+					const inactive = calculateRating(
+						glicko,
+						{
+							rating,
+							deviation,
+							lastRatedAt: '2025-07-24T00:00:00.000Z'
+						},
+						opponent,
+						score,
+						calculationTime
+					);
+
+					const recentChange = Math.abs(recent.rating - rating);
+					const inactiveChange = Math.abs(inactive.rating - rating);
+					const changeTolerance = Number.EPSILON * Math.max(1, recentChange, inactiveChange) * 16;
+					const deviationTolerance =
+						Number.EPSILON * Math.max(1, recent.deviation!, inactive.deviation!) * 16;
+
+					expect(inactiveChange + changeTolerance).toBeGreaterThanOrEqual(recentChange);
+					expect(inactive.deviation! + deviationTolerance).toBeGreaterThanOrEqual(
+						recent.deviation!
+					);
+				}
+			),
+			{ numRuns: 1000 }
+		);
+	});
+
+	test('a large sequence of configured Glicko updates remains finite and deterministic', () => {
+		const configuration = parseRatingConfiguration({
+			system: 'glicko',
+			glicko: {
+				initialDeviation: 350,
+				maxDeviation: 350,
+				periodDeviationIncrease: 63.2,
+				scale: 400
+			}
+		});
+		const run = () => {
+			let player: RatingState = { rating: 1200, deviation: 350 };
+			for (let index = 0; index < 10_000; index += 1) {
+				player = calculateRating(
+					configuration,
+					player,
+					{ rating: 800 + (index % 1400), deviation: 1 + (index % 350) },
+					[0, 0.5, 1][index % 3] as 0 | 0.5 | 1,
+					calculationTime
+				);
+			}
+			return player;
+		};
+
+		const first = run();
+		expect(first).toEqual(run());
+		expect(Number.isFinite(first.rating)).toBe(true);
+		expect(Number.isFinite(first.deviation)).toBe(true);
+		expect(first.deviation).toBeGreaterThan(0);
+		expect(first.deviation).toBeLessThanOrEqual(configuration.glicko.maxDeviation);
+	});
+
 	test('valid calculations produce finite persisted states and advance time', () => {
 		fc.assert(
 			fc.property(
