@@ -65,18 +65,21 @@ export type Database = {
         Row: {
           created_at: string
           display_name: string
+          role: Database["public"]["Enums"]["app_role"]
           user_id: string
           username: string | null
         }
         Insert: {
           created_at?: string
           display_name?: string
+          role?: Database["public"]["Enums"]["app_role"]
           user_id: string
           username?: string | null
         }
         Update: {
           created_at?: string
           display_name?: string
+          role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
           username?: string | null
         }
@@ -186,10 +189,30 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      apply_rating_result: {
+        Args: {
+          p_expected_configuration_revision: number
+          p_expected_loser_other_data: Json
+          p_expected_loser_rating: number
+          p_expected_loser_type: string
+          p_expected_winner_other_data: Json
+          p_expected_winner_rating: number
+          p_expected_winner_type: string
+          p_game_id: number
+          p_loser_id: string
+          p_new_loser_other_data: Json
+          p_new_loser_rating: number
+          p_new_type: string
+          p_new_winner_other_data: Json
+          p_new_winner_rating: number
+          p_winner_id: string
+        }
+        Returns: boolean
+      }
       ensure_game_rating: { Args: { p_game_id: number }; Returns: undefined }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "player" | "admin"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -864,7 +887,9 @@ export const Constants = {
     Enums: {},
   },
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["player", "admin"],
+    },
   },
   storage: {
     Enums: {

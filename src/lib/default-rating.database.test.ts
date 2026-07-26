@@ -12,6 +12,7 @@ const supabaseAnonKey =
 	runtimeEnv.PUBLIC_SUPABASE_ANON_KEY ?? fileEnv.PUBLIC_SUPABASE_ANON_KEY ?? '';
 const serviceRoleKey =
 	runtimeEnv.SUPABASE_SERVICE_ROLE_KEY ?? fileEnv.SUPABASE_SERVICE_ROLE_KEY ?? '';
+const runDatabaseTests = runtimeEnv.RUN_DATABASE_TESTS === 'true';
 const localHostname = (() => {
 	try {
 		return new URL(supabaseUrl).hostname;
@@ -20,7 +21,12 @@ const localHostname = (() => {
 	}
 })();
 const describeLocal =
-	localHostname === '127.0.0.1' || localHostname === 'localhost' ? describe : describe.skip;
+	runDatabaseTests &&
+	supabaseAnonKey.length > 0 &&
+	serviceRoleKey.length > 0 &&
+	(localHostname === '127.0.0.1' || localHostname === 'localhost')
+		? describe
+		: describe.skip;
 
 type UserFixture = {
 	id: string;
@@ -41,9 +47,7 @@ function configurationForJoin(defaultRating: number, initialDeviation: number) {
 }
 
 describeLocal('default-rating database invariants', () => {
-	const admin = createClient<Database>(supabaseUrl, serviceRoleKey, {
-		auth: { persistSession: false, autoRefreshToken: false }
-	});
+	let admin: SupabaseClient<Database>;
 	const runId = crypto.randomUUID();
 	const password = `Rating-${runId}!`;
 	const users: UserFixture[] = [];
@@ -69,6 +73,9 @@ describeLocal('default-rating database invariants', () => {
 	}
 
 	beforeAll(async () => {
+		admin = createClient<Database>(supabaseUrl, serviceRoleKey, {
+			auth: { persistSession: false, autoRefreshToken: false }
+		});
 		const created = await Promise.all([
 			createUser('owner'),
 			createUser('attacker'),

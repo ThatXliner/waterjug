@@ -1,10 +1,10 @@
 import { error, fail } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { PUBLIC_SUPABASE_URL } from '$env/static/public';
-import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '$lib/supabase';
-import { requireAuthenticatedUserId } from '$lib/server/auth';
+import { requireUser } from '$lib/server/auth';
+import { getPrivilegedSupabase } from '$lib/server/supabase';
+import { isUuid } from '$lib/uuid';
 import {
 	commitRatingConfiguration,
 	createRatingCalculator,
@@ -16,6 +16,8 @@ import {
 	type RatingConfiguration,
 	type RatingState
 } from '$lib/rating';
+
+const MAX_RESULT_UPDATE_ATTEMPTS = 3;
 
 async function fetchRatings(supabase: SupabaseClient<Database>, game_id: number) {
 	const res = await supabase
@@ -29,7 +31,9 @@ async function fetchRatings(supabase: SupabaseClient<Database>, game_id: number)
 	return data as NonNullable<typeof data>;
 }
 
-export const load: PageServerLoad = async ({ params, locals: { supabase } }) => {
+export const load: PageServerLoad = async ({ params, locals }) => {
+	const { supabase } = locals;
+	const user = requireUser(locals).id;
 	const gameId = parseInt(params.id);
 	const { data: gameData, error: err } = await supabase
 		.from('games')
@@ -53,10 +57,6 @@ export const load: PageServerLoad = async ({ params, locals: { supabase } }) => 
 	let data = await fetchRatings(supabase, gameId).catch((err) => {
 		error(500, err);
 	});
-	const user = (await supabase.auth.getUser())?.data?.user?.id;
-	if (!user) {
-		error(401, 'No user');
-	}
 	if (data.filter((x: { user_id: string }) => x.user_id == user).length == 0) {
 		const { error: insertError } = await supabase.rpc('ensure_game_rating', {
 			p_game_id: gameId
@@ -102,88 +102,102 @@ async function getRatingFor(
 	gameId: number,
 	user: string,
 	configuration: RatingConfiguration
-): Promise<RatingState> {
-	const { data: ratings, error } = await supabase
+): Promise<{
+	state: RatingState;
+	type: string;
+	otherData: Database['public']['Tables']['ratings']['Row']['other_data'];
+}> {
+	const { data: rating, error } = await supabase
 		.from('ratings')
-		.select('rating, other_data')
+		.select('rating, other_data, type')
 		.eq('game_id', gameId)
-		.eq('user_id', user);
+		.eq('user_id', user)
+		.single();
 	if (error != null) {
 		throw error;
 	}
-	if (ratings.length != 1) {
-		throw new Error('Impossible');
-	}
-	const fetched = ratings[0];
-	const metadata = fetched.other_data as { deviation?: number; rd?: number; lastRatedAt?: string };
+	const metadata = rating.other_data as {
+		deviation?: number;
+		rd?: number;
+		lastRatedAt?: string;
+	};
 	return {
-		rating: fetched.rating,
-		deviation: metadata.deviation ?? metadata.rd ?? configuration.glicko.initialDeviation,
-		lastRatedAt: metadata.lastRatedAt
+		state: {
+			rating: rating.rating,
+			deviation: metadata.deviation ?? metadata.rd ?? configuration.glicko.initialDeviation,
+			lastRatedAt: metadata.lastRatedAt
+		},
+		type: rating.type,
+		otherData: rating.other_data
 	};
 }
 
 export const actions: Actions = {
-	rate: async ({ request, params, locals: { safeGetSession } }) => {
-		const { user } = await safeGetSession();
-		const userId = requireAuthenticatedUserId(user);
+	rate: async ({ request, params, locals }) => {
+		const user = requireUser(locals).id;
 		const formData = await request.formData();
 		const winner = formData.get('winner')?.toString();
-		if (!winner) return fail(400, { ratingError: 'Select a winner.' });
-		const supabaseServer = await createClient<Database>(
-			PUBLIC_SUPABASE_URL,
-			SUPABASE_SERVICE_ROLE_KEY
-		);
-		if (winner === userId) return fail(400, { ratingError: 'You cannot play against yourself.' });
-		const gameId = parseInt(params.id);
-		const { data: game, error: gameError } = await supabaseServer
-			.from('games')
-			.select('rating_configuration')
-			.eq('game_id', gameId)
-			.single();
-		if (gameError) throw gameError;
-		const configuration = parseRatingConfiguration(game.rating_configuration);
-		const oldYou = await getRatingFor(supabaseServer, gameId, userId, configuration);
-		const oldThem = await getRatingFor(supabaseServer, gameId, winner, configuration);
-		const now = new Date();
-		const match = createRatingCalculator(configuration).calculateMatch(oldYou, oldThem, 0, now);
-		const newYou = match.player;
-		const newThem = match.opponent;
-		{
-			const { error } = await supabaseServer
-				.from('ratings')
-				.update({
-					rating: newYou.rating,
-					type: configuration.system,
-					other_data: {
-						deviation: newYou.deviation,
-						lastRatedAt: newYou.lastRatedAt
-					}
-				})
-				.eq('game_id', gameId)
-				.eq('user_id', userId)
-				.select();
-			if (error != null) throw error;
+		if (!isUuid(winner) || winner === user) {
+			return fail(400, { resultError: 'Select another player as the winner' });
 		}
-		const { error } = await supabaseServer
-			.from('ratings')
-			.update({
-				rating: newThem.rating,
-				type: configuration.system,
-				other_data: {
-					deviation: newThem.deviation,
-					lastRatedAt: newThem.lastRatedAt
+		const gameId = parseInt(params.id);
+		const privilegedSupabase = getPrivilegedSupabase();
+
+		for (let attempt = 0; attempt < MAX_RESULT_UPDATE_ATTEMPTS; attempt += 1) {
+			const { data: game, error: gameError } = await privilegedSupabase
+				.from('games')
+				.select('rating_configuration, rating_configuration_revision')
+				.eq('game_id', gameId)
+				.single();
+			if (gameError) throw gameError;
+
+			const configuration = parseRatingConfiguration(game.rating_configuration);
+			const oldYou = await getRatingFor(privilegedSupabase, gameId, user, configuration);
+			const oldThem = await getRatingFor(privilegedSupabase, gameId, winner, configuration);
+			const match = createRatingCalculator(configuration).calculateMatch(
+				oldYou.state,
+				oldThem.state,
+				0,
+				new Date()
+			);
+			const loserOtherData = {
+				deviation: match.player.deviation,
+				lastRatedAt: match.player.lastRatedAt
+			};
+			const winnerOtherData = {
+				deviation: match.opponent.deviation,
+				lastRatedAt: match.opponent.lastRatedAt
+			};
+			const { data: applied, error: updateError } = await privilegedSupabase.rpc(
+				'apply_rating_result',
+				{
+					p_game_id: gameId,
+					p_expected_configuration_revision: game.rating_configuration_revision,
+					p_loser_id: user,
+					p_winner_id: winner,
+					p_expected_loser_rating: oldYou.state.rating,
+					p_expected_loser_type: oldYou.type,
+					p_expected_loser_other_data: oldYou.otherData,
+					p_expected_winner_rating: oldThem.state.rating,
+					p_expected_winner_type: oldThem.type,
+					p_expected_winner_other_data: oldThem.otherData,
+					p_new_loser_rating: match.player.rating,
+					p_new_loser_other_data: loserOtherData,
+					p_new_winner_rating: match.opponent.rating,
+					p_new_winner_other_data: winnerOtherData,
+					p_new_type: configuration.system
 				}
-			})
-			.eq('game_id', gameId)
-			.eq('user_id', winner)
-			.select();
-		if (error != null) throw error;
+			);
+			if (updateError) throw updateError;
+			if (applied) return { resultSuccess: true };
+		}
+
+		error(409, 'Ratings or configuration changed concurrently; retry the result');
 	},
 
-	createTournament: async ({ request, params, locals: { supabase, safeGetSession } }) => {
-		const { user } = await safeGetSession();
-		const userId = requireAuthenticatedUserId(user);
+	createTournament: async ({ request, params, locals }) => {
+		const user = requireUser(locals);
+		const { supabase } = locals;
 
 		const formData = await request.formData();
 		const name = formData.get('name')?.toString().trim();
@@ -199,7 +213,7 @@ export const actions: Actions = {
 		const gameId = parseInt(params.id);
 		const { data: tournament, error: insertErr } = await supabase
 			.from('tournaments')
-			.insert({ game_id: gameId, name, type, created_by: userId, status: 'pending' })
+			.insert({ game_id: gameId, name, type, created_by: user.id, status: 'pending' })
 			.select('tournament_id')
 			.single();
 
@@ -218,9 +232,9 @@ export const actions: Actions = {
 		return { tournamentSuccess: true };
 	},
 
-	configure: async ({ request, params, locals: { supabase, safeGetSession } }) => {
-		const { user } = await safeGetSession();
-		const userId = requireAuthenticatedUserId(user);
+	configure: async ({ request, params, locals }) => {
+		const user = requireUser(locals);
+		const { supabase } = locals;
 		const formData = await request.formData();
 		let configuration;
 		let expectedRevision;
@@ -241,7 +255,7 @@ export const actions: Actions = {
 			.eq('game_id', parseInt(params.id))
 			.single();
 		if (fetchError) return fail(500, { configurationError: fetchError.message });
-		if (existing.created_by !== userId)
+		if (existing.created_by !== user.id)
 			error(403, 'Only the game owner can change rating settings');
 		try {
 			await commitRatingConfiguration(

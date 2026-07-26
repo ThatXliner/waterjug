@@ -20,7 +20,7 @@
 			<div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
 				{#each ratings as r}
 					<div class="card bg-base-200 shadow p-4">
-						<h3 class="font-semibold">{r.games?.[0]?.name ?? 'Unknown Game'}</h3>
+						<h3 class="font-semibold">{r.games?.name ?? 'Unknown Game'}</h3>
 						<p>Rating: {r.rating}</p>
 						<a href="/game/play/{r.game_id}" class="btn btn-sm btn-primary mt-2">View Game</a>
 					</div>

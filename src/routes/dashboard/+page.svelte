@@ -6,6 +6,7 @@
 	let ratings = $derived(data.ratings);
 	let displayName = $derived(data.displayName);
 	let username = $derived(data.username);
+	let role = $derived(data.role);
 	let editingName = $state(false);
 	let nameValue = $state('');
 	let editingUsername = $state(false);
@@ -115,13 +116,15 @@
 				<p class="text-error text-sm mt-1">{form.error}</p>
 			{/if}
 		</div>
-		<a class="btn btn-primary" href="/game/new">Create a game</a>
+		{#if role === 'admin'}
+			<a class="btn btn-primary" href="/game/new">Create a game</a>
+		{/if}
 	</header>
 	<main class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
 		{#each ratings as rating}
 			<div class="card w-96 bg-base-200 shadow-xl">
 				<div class="card-body">
-					<h2 class="card-title">{rating.games?.[0]?.name}</h2>
+					<h2 class="card-title">{rating.games?.name}</h2>
 					<p>Your rating: {rating.rating}</p>
 					<div class="card-actions">
 						<a href="/game/play/{rating.game_id}" class="btn btn-primary w-full">Go to game</a>

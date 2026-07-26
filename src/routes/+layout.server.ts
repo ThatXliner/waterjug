@@ -1,7 +1,9 @@
 import type { LayoutServerLoad } from './$types';
 
-export const load: LayoutServerLoad = async ({ locals: { safeGetSession, supabase }, cookies }) => {
-	const { session, user } = await safeGetSession();
+export const load: LayoutServerLoad = async ({
+	locals: { session, user, supabase, role },
+	cookies
+}) => {
 	let displayName = '';
 	let username: string | null = null;
 	if (user) {
@@ -15,6 +17,7 @@ export const load: LayoutServerLoad = async ({ locals: { safeGetSession, supabas
 	}
 	return {
 		session,
+		role,
 		displayName,
 		username,
 		cookies: cookies.getAll()

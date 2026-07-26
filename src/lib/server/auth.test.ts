@@ -1,9 +1,12 @@
 import fc from 'fast-check';
-import { describe, expect, test } from 'vitest';
-import { requireAuthenticatedUserId } from './auth';
+import { describe, expect, it } from 'vitest';
+import type { User } from '@supabase/supabase-js';
+import { requireAuthenticatedUserId, requireRole, requireUser } from './auth';
 
-describe('server authentication boundary', () => {
-	test('accepts every nonblank authenticated user ID', () => {
+const user = { id: 'd34db33f-0000-4000-8000-000000000000' } as User;
+
+describe('server authorization', () => {
+	it('accepts every nonblank authenticated user ID', () => {
 		fc.assert(
 			fc.property(
 				fc.string({ minLength: 1 }).filter((id) => id.trim().length > 0),
@@ -15,27 +18,41 @@ describe('server authentication boundary', () => {
 		);
 	});
 
-	test('rejects arbitrary malformed authentication state with 401', () => {
+	it('rejects arbitrary malformed authentication state with 401', () => {
 		fc.assert(
-			fc.property(fc.anything(), (user) => {
+			fc.property(fc.anything(), (candidate) => {
 				fc.pre(
 					!(
-						typeof user === 'object' &&
-						user !== null &&
-						'id' in user &&
-						typeof user.id === 'string' &&
-						user.id.trim().length > 0
+						typeof candidate === 'object' &&
+						candidate !== null &&
+						'id' in candidate &&
+						typeof candidate.id === 'string' &&
+						candidate.id.trim().length > 0
 					)
 				);
 
-				try {
-					requireAuthenticatedUserId(user);
-					expect.unreachable('Expected authentication to be rejected');
-				} catch (authenticationError) {
-					expect(authenticationError).toMatchObject({ status: 401 });
-				}
+				expect(() => requireAuthenticatedUserId(candidate)).toThrowError(
+					expect.objectContaining({ status: 401 })
+				);
 			}),
 			{ numRuns: 1000 }
 		);
+	});
+
+	it('rejects anonymous users before checking a role', () => {
+		expect(() => requireUser({ user: null, role: null })).toThrowError(
+			expect.objectContaining({ status: 401 })
+		);
+	});
+
+	it('rejects authenticated users without the required role', () => {
+		expect(() => requireRole({ user, role: 'player' }, 'admin')).toThrowError(
+			expect.objectContaining({ status: 403 })
+		);
+	});
+
+	it('returns the verified user when the role is allowed', () => {
+		expect(requireRole({ user, role: 'admin' }, 'admin')).toBe(user);
+		expect(requireRole({ user, role: 'player' }, 'player', 'admin')).toBe(user);
 	});
 });
