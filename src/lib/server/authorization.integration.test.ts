@@ -89,12 +89,18 @@ databaseDescribe('Supabase authorization invariants', () => {
 
 			const { data: game, error: adminCreateError } = await admin.client
 				.from('games')
-				.insert({ name: `admin-game-${suffix}` })
+				.insert({ name: `admin-game-${suffix}`, created_by: admin.id })
 				.select('game_id')
 				.single();
 			expect(adminCreateError).toBeNull();
 			expect(game).not.toBeNull();
 			gameId = game!.game_id;
+
+			const { error: forgedGameOwnerError } = await admin.client.from('games').insert({
+				name: `forged-owner-game-${suffix}`,
+				created_by: player.id
+			});
+			expect(forgedGameOwnerError).not.toBeNull();
 
 			const { data: tournament, error: tournamentError } = await admin.client
 				.from('tournaments')
@@ -229,14 +235,16 @@ databaseDescribe('Supabase authorization invariants', () => {
 				.update({ rating_configuration_revision: 2 })
 				.eq('game_id', gameId);
 			expect(revisionError).toBeNull();
-			const { data: staleConfigurationApplied, error: staleConfigurationError } =
-				await service.rpc('apply_rating_result', {
+			const { data: staleConfigurationApplied, error: staleConfigurationError } = await service.rpc(
+				'apply_rating_result',
+				{
 					...rpcArgs,
 					p_expected_loser_rating: winningArgs.p_new_loser_rating,
 					p_expected_loser_other_data: winningArgs.p_new_loser_other_data,
 					p_expected_winner_rating: winningArgs.p_new_winner_rating,
 					p_expected_winner_other_data: winningArgs.p_new_winner_other_data
-				});
+				}
+			);
 			expect(staleConfigurationError).toBeNull();
 			expect(staleConfigurationApplied).toBe(false);
 		} finally {

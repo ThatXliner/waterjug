@@ -32,7 +32,8 @@ CREATE POLICY "Admins may create games"
     FOR INSERT
     TO "authenticated"
     WITH CHECK (
-        EXISTS (
+        (SELECT auth.uid()) = created_by
+        AND EXISTS (
             SELECT 1
             FROM "public"."profiles"
             WHERE "profiles"."user_id" = auth.uid()
@@ -164,10 +165,10 @@ BEGIN
 
     IF loser.rating IS DISTINCT FROM p_expected_loser_rating
        OR loser.type IS DISTINCT FROM p_expected_loser_type
-       OR loser.other_data IS DISTINCT FROM p_expected_loser_other_data
+       OR loser.other_data::jsonb IS DISTINCT FROM p_expected_loser_other_data
        OR winner.rating IS DISTINCT FROM p_expected_winner_rating
        OR winner.type IS DISTINCT FROM p_expected_winner_type
-       OR winner.other_data IS DISTINCT FROM p_expected_winner_other_data THEN
+       OR winner.other_data::jsonb IS DISTINCT FROM p_expected_winner_other_data THEN
         RETURN false;
     END IF;
 
