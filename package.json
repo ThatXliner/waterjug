@@ -16,7 +16,7 @@
 		"format": "prettier --write .",
 		"test:database:authorization": "supabase test db supabase/tests/authorization_privileges.test.sql --local",
 		"test:database:glicko": "supabase test db supabase/tests/glicko_rating_configuration.test.sql --local",
-		"test:database:results": "vitest run --config vitest.database.config.ts",
+		"test:database:results": "svelte-kit sync && vitest run --config vitest.database.config.ts",
 		"test:integration": "playwright test",
 		"test:db": "supabase test db supabase/tests",
 		"test:unit": "vitest run --exclude supabase/tests/**/*.integration.test.ts",
