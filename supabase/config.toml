@@ -71,7 +71,11 @@ enabled = true
 # in emails.
 site_url = "https://waterjug.vercel.app/" # 5173 is the default port ala Vite
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = []
+additional_redirect_urls = [
+  "https://waterjug.vercel.app/reset-password",
+  "http://localhost:5173/reset-password",
+  "http://localhost:4173/reset-password",
+]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # If disabled, the refresh token will never expire.
