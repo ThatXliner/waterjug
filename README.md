@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  A lightweight, game-agnostic rating tracker powered by Glicko.<br />
+  A lightweight, game-agnostic rating tracker powered by Glicko-2.<br />
   Create a ladder, invite the competition, and let the numbers settle it.
 </p>
 
@@ -37,7 +37,7 @@
 Make a shared leaderboard for chess, table tennis, office foosball, fighting games, or whatever your group is currently taking far too seriously.
 
 - **One ladder per game** — create a game and get a dedicated, ranked leaderboard.
-- **Ratings that understand uncertainty** — an in-house Glicko implementation tracks both rating and rating deviation.
+- **Ratings that understand uncertainty** — Glicko-2 tracks rating, rating deviation, and volatility.
 - **Fast result reporting** — record a head-to-head result and update both players immediately.
 - **A face behind every score** — display names and public profiles keep the leaderboard readable.
 - **Flexible tournament groups** — label an event as bracket or round-robin, choose participants,
@@ -52,7 +52,7 @@ Make a shared leaderboard for chess, table tennis, office foosball, fighting gam
 
 1. **Create a game.** A fresh ladder starts at a default rating of `1200`.
 2. **Join the competition.** Visiting a game adds the signed-in player to its leaderboard.
-3. **Report the result.** Glicko recalculates both players' ratings and rating deviations.
+3. **Report the result.** Glicko-2 recalculates both players' ratings, deviations, and volatilities.
 
 No game-specific rules. No spreadsheets. Just a shared answer to _“okay, but who is actually better?”_
 
@@ -100,18 +100,18 @@ Open [localhost:5173](http://localhost:5173), create an account, and start a lad
 
 ## Under the hood
 
-| Layer   | Technology               | What it does                                       |
-| ------- | ------------------------ | -------------------------------------------------- |
-| App     | SvelteKit 2 + Svelte 5   | Routes, server actions, and reactive UI            |
-| UI      | Tailwind CSS 4 + daisyUI | Layout, components, and theming                    |
-| Data    | Supabase + Postgres      | Auth, relational data, and row-level security      |
-| Ratings | TypeScript               | In-house Glicko calculations with rating deviation |
-| Tests   | Vitest + Playwright      | Unit and browser-level coverage                    |
-| Runtime | Bun + Vite               | Package management and local development           |
+| Layer   | Technology               | What it does                                               |
+| ------- | ------------------------ | ---------------------------------------------------------- |
+| App     | SvelteKit 2 + Svelte 5   | Routes, server actions, and reactive UI                    |
+| UI      | Tailwind CSS 4 + daisyUI | Layout, components, and theming                            |
+| Data    | Supabase + Postgres      | Auth, relational data, and row-level security              |
+| Ratings | TypeScript               | Glicko-2 calculations with rating deviation and volatility |
+| Tests   | Vitest + Playwright      | Unit and browser-level coverage                            |
+| Runtime | Bun + Vite               | Package management and local development                   |
 
 ```text
 src/
-├── lib/rating.ts              # Configurable Glicko, Elo, and custom rating engine
+├── lib/rating.ts              # Configurable Glicko-2, Elo, and custom rating engine
 ├── routes/dashboard/          # Player's games and profile settings
 ├── routes/game/new/           # Ladder creation
 ├── routes/game/play/[id=id]/  # Leaderboard, results, and tournaments
@@ -137,7 +137,7 @@ supabase/
 ## Roadmap
 
 - [x] Game-agnostic rating ladders
-- [x] Glicko rating updates
+- [x] Glicko-2 rating updates
 - [x] Email authentication and display names
 - [x] Public player profiles
 - [x] Flexible bracket and round-robin tournament groups
@@ -148,19 +148,19 @@ supabase/
 - [x] Configurable rating systems
   - [x] Configurable default rating
   - [x] Configurable rating period
-  - [x] Parameters for the Glicko system
+  - [x] Parameters for the Glicko-2 system
   - [x] Parameters for the Elo system
   - [x] Safely evaluated custom formulas
 - [x] [Hardened and fully tested database policies](docs/database-restrictions.md)
 
 ## Rating configuration
 
-Each game stores one versioned rating configuration. Game owners choose Glicko, Elo, or a
+Each game stores one versioned rating configuration. Game owners choose Glicko-2, Elo, or a
 custom formula when creating a game and can change the configuration later without rewriting
 existing player ratings. New players receive the configured starting rating.
 
-- Glicko supports rating-period length, initial and maximum deviation, deviation increase per
-  inactive period, and rating scale.
+- Glicko-2 supports rating-period length, initial and maximum deviation, initial volatility,
+  and the system constant τ. Each confirmed match is evaluated as one rating period.
 - Elo supports K-factor (default `32`, range `0.01`–`1000`) and rating scale (default
   `400`, range `1`–`10000`). K-factor controls how quickly ratings move; scale controls how
   strongly a rating gap changes the expected score.
@@ -180,10 +180,8 @@ construct or expected input and include its character location when one is avail
 bounds constrain parsing and evaluation work; they do not make custom formulas suitable for
 general-purpose scripting.
 
-Glicko configuration accepts initial and maximum deviations from `1` to `1000`, deviation
-increase from `0` to `1000`, and a scale from `1` to `10000`. Its deviation calculations use
-overflow- and underflow-resistant formulas so legacy edge-case states remain finite without
-changing ordinary default behavior.
+Glicko-2 configuration accepts initial and maximum deviations from `1` to `1000`, initial
+volatility from `0.000001` to `0.2`, and τ from `0.3` to `1.2`.
 
 ## Contributing
 

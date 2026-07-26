@@ -148,11 +148,13 @@ function ratingStateFromSnapshot(
 	const metadata = otherData as {
 		deviation?: number;
 		rd?: number;
+		volatility?: number;
 		lastRatedAt?: string;
 	};
 	return {
 		rating,
 		deviation: metadata.deviation ?? metadata.rd ?? configuration.glicko.initialDeviation,
+		volatility: metadata.volatility ?? configuration.glicko.initialVolatility,
 		lastRatedAt: metadata.lastRatedAt
 	};
 }
@@ -227,10 +229,18 @@ export const actions: Actions = {
 
 		let winnerNewRating: number | null = null;
 		let winnerNewType: string | null = null;
-		let winnerNewOtherData: { deviation?: number; lastRatedAt?: string } | null = null;
+		let winnerNewOtherData: {
+			deviation?: number;
+			volatility?: number;
+			lastRatedAt?: string;
+		} | null = null;
 		let loserNewRating: number | null = null;
 		let loserNewType: string | null = null;
-		let loserNewOtherData: { deviation?: number; lastRatedAt?: string } | null = null;
+		let loserNewOtherData: {
+			deviation?: number;
+			volatility?: number;
+			lastRatedAt?: string;
+		} | null = null;
 
 		if (decision === 'confirmed') {
 			const configuration = parseRatingConfiguration(result.rating_configuration_snapshot);
@@ -254,12 +264,14 @@ export const actions: Actions = {
 			winnerNewType = configuration.system;
 			winnerNewOtherData = {
 				deviation: match.player.deviation,
+				volatility: match.player.volatility,
 				lastRatedAt: match.player.lastRatedAt
 			};
 			loserNewRating = match.opponent.rating;
 			loserNewType = configuration.system;
 			loserNewOtherData = {
 				deviation: match.opponent.deviation,
+				volatility: match.opponent.volatility,
 				lastRatedAt: match.opponent.lastRatedAt
 			};
 		}

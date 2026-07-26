@@ -16,7 +16,7 @@
 		"format": "prettier --write .",
 		"test:database:authorization": "supabase test db supabase/tests/authorization_privileges.test.sql --local",
 		"test:database:glicko": "supabase test db supabase/tests/glicko_rating_configuration.test.sql --local",
-		"test:database:results": "svelte-kit sync && vitest run --config vitest.database.config.ts",
+		"test:database:results": "svelte-kit sync && RUN_DATABASE_TESTS=true vitest run --config vitest.database.config.ts",
 		"test:integration": "playwright test",
 		"test:db": "supabase test db supabase/tests",
 		"test:unit": "vitest run --exclude supabase/tests/**/*.integration.test.ts",
@@ -63,7 +63,8 @@
 		"@codemirror/view": "^6.43.6",
 		"@supabase/ssr": "^0.12.3",
 		"@supabase/supabase-js": "^2.110.8",
-		"codemirror": "^6.0.2"
+		"codemirror": "^6.0.2",
+		"glicko2-lite": "^6.0.0"
 	},
 	"overrides": {
 		"estree-walker": "2.0.2"

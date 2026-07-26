@@ -72,11 +72,11 @@
 						points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"
 					/></svg
 				>
-				<h3 class="mt-4 text-xl font-semibold text-zinc-900 dark:text-zinc-100">Glicko</h3>
+				<h3 class="mt-4 text-xl font-semibold text-zinc-900 dark:text-zinc-100">Glicko-2</h3>
 				<p class="mt-2 text-zinc-600 dark:text-zinc-400">
 					WaterJug implements <a
 						href="https://en.wikipedia.org/wiki/Glicko_rating_system"
-						class="link">Glicko</a
+						class="link">Glicko-2</a
 					>, the leading rating system used in
 					<a
 						href="https://www.chess.com/blog/kurtgodden/elo-to-glicko-your-rating-explained"

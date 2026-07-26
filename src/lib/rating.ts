@@ -1,15 +1,17 @@
+import { glicko2 } from 'glicko2-lite';
+
 export type RatingSystem = 'glicko' | 'elo' | 'custom';
 
 export type RatingConfiguration = {
-	version: 1;
+	version: 2;
 	system: RatingSystem;
 	defaultRating: number;
 	periodDays: number;
 	glicko: {
 		initialDeviation: number;
 		maxDeviation: number;
-		periodDeviationIncrease: number;
-		scale: number;
+		initialVolatility: number;
+		tau: number;
 	};
 	elo: {
 		kFactor: number;
@@ -23,19 +25,20 @@ export type RatingConfiguration = {
 export type RatingState = {
 	rating: number;
 	deviation?: number;
+	volatility?: number;
 	lastRatedAt?: string;
 };
 
 export const DEFAULT_RATING_CONFIGURATION: RatingConfiguration = {
-	version: 1,
+	version: 2,
 	system: 'glicko',
 	defaultRating: 1200,
 	periodDays: 1,
 	glicko: {
 		initialDeviation: 350,
 		maxDeviation: 350,
-		periodDeviationIncrease: 63.2,
-		scale: 400
+		initialVolatility: 0.06,
+		tau: 0.5
 	},
 	elo: {
 		kFactor: 32,
@@ -101,14 +104,14 @@ export function parseRatingConfiguration(value: unknown): RatingConfiguration {
 	const custom = record(input.custom);
 	const issues: string[] = [];
 	const version = input.version ?? 1;
-	if (version !== 1) issues.push('version must be 1');
+	if (version !== 1 && version !== 2) issues.push('version must be 1 or 2');
 	const system = input.system ?? DEFAULT_RATING_CONFIGURATION.system;
 	if (!['glicko', 'elo', 'custom'].includes(String(system))) {
 		issues.push('system must be glicko, elo, or custom');
 	}
 
 	const configuration: RatingConfiguration = {
-		version: 1,
+		version: 2,
 		system: ['glicko', 'elo', 'custom'].includes(String(system))
 			? (system as RatingSystem)
 			: DEFAULT_RATING_CONFIGURATION.system,
@@ -145,20 +148,20 @@ export function parseRatingConfiguration(value: unknown): RatingConfiguration {
 				1000,
 				issues
 			),
-			periodDeviationIncrease: numberField(
-				glicko.periodDeviationIncrease,
-				DEFAULT_RATING_CONFIGURATION.glicko.periodDeviationIncrease,
-				'glicko.periodDeviationIncrease',
-				0,
-				1000,
+			initialVolatility: numberField(
+				version === 2 ? glicko.initialVolatility : undefined,
+				DEFAULT_RATING_CONFIGURATION.glicko.initialVolatility,
+				'glicko.initialVolatility',
+				0.000001,
+				0.2,
 				issues
 			),
-			scale: numberField(
-				glicko.scale,
-				DEFAULT_RATING_CONFIGURATION.glicko.scale,
-				'glicko.scale',
-				1,
-				10_000,
+			tau: numberField(
+				version === 2 ? glicko.tau : undefined,
+				DEFAULT_RATING_CONFIGURATION.glicko.tau,
+				'glicko.tau',
+				0.3,
+				1.2,
 				issues
 			)
 		},
@@ -234,15 +237,15 @@ export function parseRatingConfigurationNumber(value: FormDataEntryValue | null)
 export function parseRatingConfigurationForm(formData: FormData) {
 	const number = (field: string) => parseRatingConfigurationNumber(formData.get(field));
 	return parseRatingConfiguration({
-		version: 1,
+		version: 2,
 		system: formData.get('system')?.toString(),
 		defaultRating: number('defaultRating'),
 		periodDays: parseRatingPeriodDaysFormValue(formData.get('periodDays')),
 		glicko: {
 			initialDeviation: number('glickoInitialDeviation'),
 			maxDeviation: number('glickoMaxDeviation'),
-			periodDeviationIncrease: number('glickoPeriodDeviationIncrease'),
-			scale: number('glickoScale')
+			initialVolatility: number('glickoInitialVolatility'),
+			tau: number('glickoTau')
 		},
 		elo: {
 			kFactor: number('eloKFactor'),
@@ -616,36 +619,78 @@ function periodsSince(lastRatedAt: string | undefined, now: Date, periodDays: nu
 	return Math.floor(elapsed / (periodDays * 86_400_000));
 }
 
+const GLICKO2_SCALE = 173.7178;
+
+function glicko2StateBeforeCurrentPeriod(
+	config: RatingConfiguration,
+	state: RatingState,
+	now: Date
+): Required<Pick<RatingState, 'rating' | 'deviation' | 'volatility'>> {
+	const deviation = state.deviation ?? config.glicko.initialDeviation;
+	const volatility = state.volatility ?? config.glicko.initialVolatility;
+	const inactivePeriods = periodsSince(state.lastRatedAt, now, config.periodDays);
+	const phi = deviation / GLICKO2_SCALE;
+	return {
+		rating: state.rating,
+		deviation: Math.min(
+			Math.sqrt(phi * phi + inactivePeriods * volatility * volatility) * GLICKO2_SCALE,
+			config.glicko.maxDeviation
+		),
+		volatility
+	};
+}
+
+export type Glicko2Opponent = {
+	rating: number;
+	deviation: number;
+	score: 0 | 0.5 | 1;
+};
+
+/**
+ * Apply one Glicko-2 rating period. The production match flow supplies one
+ * opponent; accepting a batch keeps this adapter testable against the official
+ * multi-opponent reference example.
+ */
+export function calculateGlicko2RatingPeriod(
+	configValue: RatingConfiguration,
+	player: Required<Pick<RatingState, 'rating' | 'deviation' | 'volatility'>>,
+	opponents: readonly Glicko2Opponent[]
+) {
+	const config = parseRatingConfiguration(configValue);
+	if (opponents.length === 0) {
+		throw new RatingCalculationError('a Glicko-2 rating period must contain an opponent');
+	}
+	const result = glicko2(
+		player.rating,
+		player.deviation,
+		player.volatility,
+		opponents.map(({ rating, deviation, score }) => [rating, deviation, score]),
+		{ rating: config.defaultRating, tau: config.glicko.tau }
+	);
+	return validateCalculatedState({
+		rating: result.rating,
+		deviation: Math.min(result.rd, config.glicko.maxDeviation),
+		volatility: result.vol
+	});
+}
+
 function glickoRating(
 	config: RatingConfiguration,
 	player: RatingState,
 	opponent: RatingState,
-	score: number,
+	score: 0 | 0.5 | 1,
 	now: Date
 ): RatingState {
-	const parameters = config.glicko;
-	const q = Math.log(10) / parameters.scale;
-	const square = (value: number) => value * value;
-	const inactivePeriods = periodsSince(player.lastRatedAt, now, config.periodDays);
-	const deviation = Math.min(
-		Math.hypot(
-			player.deviation ?? parameters.initialDeviation,
-			Math.sqrt(inactivePeriods) * parameters.periodDeviationIncrease
-		),
-		parameters.maxDeviation
-	);
-	const opponentDeviation = opponent.deviation ?? parameters.initialDeviation;
-	const impact = 1 / Math.sqrt(1 + (3 * square(q) * square(opponentDeviation)) / square(Math.PI));
-	const expected =
-		1 / (1 + Math.pow(10, (-impact * (player.rating - opponent.rating)) / parameters.scale));
-	const variance = 1 / (square(q) * square(impact) * expected * (1 - expected));
-	const precision = 1 / square(deviation) + 1 / variance;
+	const preparedPlayer = glicko2StateBeforeCurrentPeriod(config, player, now);
+	const preparedOpponent = glicko2StateBeforeCurrentPeriod(config, opponent, now);
 	return {
-		rating: player.rating + (q / precision) * impact * (score - expected),
-		deviation: Math.min(
-			deviation / Math.sqrt(1 + square(deviation) / variance),
-			parameters.maxDeviation
-		),
+		...calculateGlicko2RatingPeriod(config, preparedPlayer, [
+			{
+				rating: preparedOpponent.rating,
+				deviation: preparedOpponent.deviation,
+				score
+			}
+		]),
 		lastRatedAt: now.toISOString()
 	};
 }
@@ -669,6 +714,17 @@ function validateRatingState(value: RatingState, name: string): RatingState {
 	) {
 		throw new RatingCalculationError(
 			`${name}.deviation must be a finite number greater than 0 and at most 1000000000`
+		);
+	}
+	if (
+		value.volatility !== undefined &&
+		(typeof value.volatility !== 'number' ||
+			!Number.isFinite(value.volatility) ||
+			value.volatility <= 0 ||
+			value.volatility > 1_000_000_000)
+	) {
+		throw new RatingCalculationError(
+			`${name}.volatility must be a finite number greater than 0 and at most 1000000000`
 		);
 	}
 	if (value.lastRatedAt !== undefined && !Number.isFinite(new Date(value.lastRatedAt).getTime())) {

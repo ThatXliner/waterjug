@@ -250,9 +250,14 @@ describeLocal('default-rating database invariants', () => {
 		expect(ratings?.every(({ type }) => type === 'glicko')).toBe(true);
 		expect(
 			ratings?.every(({ rating, other_data }) => {
-				const metadata = other_data as { deviation?: number; lastRatedAt?: string };
+				const metadata = other_data as {
+					deviation?: number;
+					volatility?: number;
+					lastRatedAt?: string;
+				};
 				return (
 					expectedSnapshots.has(`${rating}:${metadata.deviation}`) &&
+					metadata.volatility === DEFAULT_RATING_CONFIGURATION.glicko.initialVolatility &&
 					!Number.isNaN(Date.parse(metadata.lastRatedAt ?? ''))
 				);
 			})
@@ -300,8 +305,16 @@ describeLocal('default-rating database invariants', () => {
 			(
 				persistedRatings?.find(({ user_id }) => user_id === latePlayer.id)?.other_data as {
 					deviation?: number;
+					volatility?: number;
 				}
 			)?.deviation
 		).toBe(177);
+		expect(
+			(
+				persistedRatings?.find(({ user_id }) => user_id === latePlayer.id)?.other_data as {
+					volatility?: number;
+				}
+			)?.volatility
+		).toBe(finalConfiguration.glicko.initialVolatility);
 	}, 30_000);
 });

@@ -42,15 +42,15 @@ const validConfiguration: fc.Arbitrary<RatingConfiguration> = fc
 			noDefaultInfinity: true
 		}),
 		maxDeviation: fc.integer({ min: 1, max: 1000 }),
-		periodDeviationIncrease: fc.double({
-			min: 0,
-			max: 1000,
+		initialVolatility: fc.double({
+			min: 0.000001,
+			max: 0.2,
 			noNaN: true,
 			noDefaultInfinity: true
 		}),
-		glickoScale: fc.double({
-			min: 1,
-			max: 10_000,
+		tau: fc.double({
+			min: 0.3,
+			max: 1.2,
 			noNaN: true,
 			noDefaultInfinity: true
 		}),
@@ -78,15 +78,15 @@ const validConfiguration: fc.Arbitrary<RatingConfiguration> = fc
 			})
 			.map((initialDeviation) =>
 				parseRatingConfiguration({
-					version: 1,
+					version: 2,
 					system: values.system,
 					defaultRating: values.defaultRating,
 					periodDays: values.periodDays,
 					glicko: {
 						initialDeviation,
 						maxDeviation: values.maxDeviation,
-						periodDeviationIncrease: values.periodDeviationIncrease,
-						scale: values.glickoScale
+						initialVolatility: values.initialVolatility,
+						tau: values.tau
 					},
 					elo: { kFactor: values.kFactor, scale: values.eloScale },
 					custom: { formula: values.formula }
@@ -104,6 +104,12 @@ const ratingState: fc.Arbitrary<RatingState> = fc.record({
 	deviation: fc.double({
 		min: 1,
 		max: 1000,
+		noNaN: true,
+		noDefaultInfinity: true
+	}),
+	volatility: fc.double({
+		min: 0.000001,
+		max: 0.2,
 		noNaN: true,
 		noDefaultInfinity: true
 	}),
@@ -192,10 +198,10 @@ describe('rating configuration properties', () => {
 			{ path: ['glicko', 'initialDeviation'], values: [NaN, Infinity, -Infinity, 0, 1001] },
 			{ path: ['glicko', 'maxDeviation'], values: [NaN, Infinity, -Infinity, 0, 1001] },
 			{
-				path: ['glicko', 'periodDeviationIncrease'],
-				values: [NaN, Infinity, -Infinity, -1, 1001]
+				path: ['glicko', 'initialVolatility'],
+				values: [NaN, Infinity, -Infinity, 0, 0.21]
 			},
-			{ path: ['glicko', 'scale'], values: [NaN, Infinity, -Infinity, 0, 10_001] },
+			{ path: ['glicko', 'tau'], values: [NaN, Infinity, -Infinity, 0.29, 1.21] },
 			{ path: ['elo', 'kFactor'], values: [NaN, Infinity, -Infinity, 0, 1001] },
 			{ path: ['elo', 'scale'], values: [NaN, Infinity, -Infinity, 0, 10_001] }
 		];
@@ -329,8 +335,8 @@ describe('rating calculation properties', () => {
 						glicko: {
 							initialDeviation: 50,
 							maxDeviation: 1000,
-							periodDeviationIncrease: 10,
-							scale: 400
+							initialVolatility: 0.06,
+							tau: 0.5
 						}
 					});
 					const opponent = { rating: 1200, deviation: 100 };
@@ -411,29 +417,29 @@ describe('rating calculation properties', () => {
 		);
 	});
 
-	test('subnormal Glicko deviations remain stable when period growth is disabled', () => {
+	test('Glicko-2 remains stable for the minimum supported deviation', () => {
 		const configuration = parseRatingConfiguration({
 			system: 'glicko',
 			glicko: {
 				initialDeviation: 1,
 				maxDeviation: 350,
-				periodDeviationIncrease: 0,
-				scale: 400
+				initialVolatility: 0.06,
+				tau: 0.5
 			}
 		});
 		const result = calculateRating(
 			configuration,
-			{ rating: 0, deviation: Number.MIN_VALUE },
+			{ rating: 0, deviation: 1, volatility: 0.06 },
 			{ rating: 0, deviation: 1 },
 			0.5,
 			calculationTime
 		);
 
 		expect(result.rating).toBe(0);
-		expect(result.deviation).toBe(Number.MIN_VALUE);
+		expect(result.deviation).toBeGreaterThan(0);
 	});
 
-	test('Glicko rating and deviation changes are monotonic across outcomes', () => {
+	test('Glicko-2 rating changes are monotonic across outcomes', () => {
 		fc.assert(
 			fc.property(
 				validConfiguration,
@@ -447,8 +453,11 @@ describe('rating calculation properties', () => {
 
 					expect(loss.rating).toBeLessThanOrEqual(draw.rating);
 					expect(draw.rating).toBeLessThanOrEqual(win.rating);
-					expect(loss.deviation).toBe(win.deviation);
-					expect(draw.deviation).toBe(win.deviation);
+					for (const result of [loss, draw, win]) {
+						expect(result.deviation).toBeGreaterThan(0);
+						expect(result.deviation).toBeLessThanOrEqual(glicko.glicko.maxDeviation);
+						expect(result.volatility).toBeGreaterThan(0);
+					}
 				}
 			),
 			{ numRuns: 1000 }
@@ -467,10 +476,7 @@ describe('rating calculation properties', () => {
 						...configuration,
 						system: 'glicko',
 						periodDays: 1,
-						glicko: {
-							...configuration.glicko,
-							periodDeviationIncrease: Math.max(1, configuration.glicko.periodDeviationIncrease)
-						}
+						glicko: configuration.glicko
 					});
 					const opponent = { rating: rating + 100, deviation: 100 };
 					const recent = calculateRating(
@@ -518,8 +524,8 @@ describe('rating calculation properties', () => {
 			glicko: {
 				initialDeviation: 350,
 				maxDeviation: 350,
-				periodDeviationIncrease: 63.2,
-				scale: 400
+				initialVolatility: 0.06,
+				tau: 0.5
 			}
 		});
 		const run = () => {
