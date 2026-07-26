@@ -6,62 +6,44 @@ on:
   pull_request:
     branches: ['main']
 
+env:
+  # Supabase local development's shared defaults; never use these as production credentials.
+  PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+  PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
+  SUPABASE_SERVICE_ROLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU
+
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      - name: Setup Supabase v1.115.4
-        uses: supabase/setup-cli@v1
-        with:
-          version: 1.115.4
       - name: Install dependencies
         run: |
           bun install
           bunx playwright install --with-deps
       - name: Start database
         run: |
-          supabase start
-          supabase db reset
-      - name: Set environment variables
-        uses: nick-fields/retry@v2
-        with:
-          max_attempts: 3
-          timeout_minutes: 1
-          command: |
-            supabase status --output env | node scripts/convert_env.js > .env
-            test -s .env
+          bunx supabase start
+          bunx supabase db reset
       - run: bun run test
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      - name: Setup Supabase v1.115.4
-        uses: supabase/setup-cli@v1
-        with:
-          version: 1.115.4
       - name: Install dependencies
         run: bun install
       - name: Start database
         run: |
-          supabase start
-          supabase db reset
-      - name: Set environment variables
-        uses: nick-fields/retry@v2
-        with:
-          max_attempts: 3
-          timeout_minutes: 1
-          command: |
-            supabase status --output env | node scripts/convert_env.js > .env
-            test -s .env
+          bunx supabase start
+          bunx supabase db reset
       - name: Lint code style
         run: bun run lint
       - name: Check types
@@ -72,24 +54,23 @@ jobs:
       # Setting an environment variable with the value of a configuration variable
       DB_URL: ${{ secrets.DB_URL }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      - name: Setup Supabase v1.115.4
-        uses: supabase/setup-cli@v1
-        with:
-          version: 1.115.4
       - name: Install dependencies
         run: bun install
       - name: Start database
         run: |
-          supabase db start
-          supabase db reset
+          bunx supabase db start
+          bunx supabase db reset
       - name: Verify generated types match Postgres schema
         run: |
-          bun run update-types
+          bunx supabase gen types --lang typescript \
+            --db-url postgresql://postgres:postgres@127.0.0.1:54322/postgres \
+            > src/lib/supabase.ts
+          node scripts/normalize_generated_file.js src/lib/supabase.ts
           if ! git diff --ignore-space-at-eol --exit-code --quiet src/lib/supabase.ts; then
               echo "Detected uncommitted changes after build. See status below:\n" >> $GITHUB_STEP_SUMMARY
               echo '```diff' >> $GITHUB_STEP_SUMMARY
@@ -99,10 +80,10 @@ jobs:
           fi
       - name: (main only) Ensure there are no unpushed migrations
         run: |
-          if supabase migration list --db-url $DB_URL | grep -E '\s*(\d+) │ \s+ │ .+$'; then
+          if bunx supabase migration list --db-url $DB_URL | grep -E '\s*(\d+) │ \s+ │ .+$'; then
             echo "Unpushed migrations detected:" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
-            echo "$(supabase migration list --db-url $DB_URL | grep -E '\s*(\d+) │ \s+ │ .+$' --color=never)" >> $GITHUB_STEP_SUMMARY
+            echo "$(bunx supabase migration list --db-url $DB_URL | grep -E '\s*(\d+) │ \s+ │ .+$' --color=never)" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
