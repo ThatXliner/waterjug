@@ -94,8 +94,7 @@ function numberField(
 
 /**
  * Validate untrusted persisted or form-derived configuration and return a complete,
- * versioned configuration. Missing fields receive documented defaults so existing
- * games remain compatible.
+ * versioned configuration. Missing fields receive documented defaults.
  */
 export function parseRatingConfiguration(value: unknown): RatingConfiguration {
 	const input = record(value);
@@ -103,8 +102,8 @@ export function parseRatingConfiguration(value: unknown): RatingConfiguration {
 	const elo = record(input.elo);
 	const custom = record(input.custom);
 	const issues: string[] = [];
-	const version = input.version ?? 1;
-	if (version !== 1 && version !== 2) issues.push('version must be 1 or 2');
+	const version = input.version ?? DEFAULT_RATING_CONFIGURATION.version;
+	if (version !== 2) issues.push('version must be 2');
 	const system = input.system ?? DEFAULT_RATING_CONFIGURATION.system;
 	if (!['glicko', 'elo', 'custom'].includes(String(system))) {
 		issues.push('system must be glicko, elo, or custom');
@@ -149,7 +148,7 @@ export function parseRatingConfiguration(value: unknown): RatingConfiguration {
 				issues
 			),
 			initialVolatility: numberField(
-				version === 2 ? glicko.initialVolatility : undefined,
+				glicko.initialVolatility,
 				DEFAULT_RATING_CONFIGURATION.glicko.initialVolatility,
 				'glicko.initialVolatility',
 				0.000001,
@@ -157,7 +156,7 @@ export function parseRatingConfiguration(value: unknown): RatingConfiguration {
 				issues
 			),
 			tau: numberField(
-				version === 2 ? glicko.tau : undefined,
+				glicko.tau,
 				DEFAULT_RATING_CONFIGURATION.glicko.tau,
 				'glicko.tau',
 				0.3,
