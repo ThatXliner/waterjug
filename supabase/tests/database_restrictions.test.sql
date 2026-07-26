@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(49);
+select plan(52);
 
 -- The five application tables are all exposed through the public schema, so
 -- every one must have RLS enabled.
@@ -142,6 +142,24 @@ select is(
   array['search_path=""'],
   'the security-definer trigger has an empty search path'
 );
+select ok(
+  not has_function_privilege('anon', 'public.ensure_game_rating(bigint)', 'execute')
+    and has_function_privilege(
+      'authenticated',
+      'public.ensure_game_rating(bigint)',
+      'execute'
+    ),
+  'only authenticated users can execute the default-rating snapshot RPC'
+);
+select is(
+  (
+    select proconfig
+    from pg_proc
+    where oid = 'public.ensure_game_rating(bigint)'::regprocedure
+  ),
+  array['search_path=""'],
+  'the authenticated default-rating RPC has an empty search path'
+);
 
 -- Create two real Auth identities. The Auth trigger creates their profile rows.
 insert into auth.users (
@@ -243,6 +261,12 @@ select throws_ok(
   '42501',
   null,
   'anon cannot create a game'
+);
+select throws_ok(
+  $$select public.ensure_game_rating(900001)$$,
+  '42501',
+  null,
+  'anon cannot invoke the authenticated default-rating RPC'
 );
 
 reset role;

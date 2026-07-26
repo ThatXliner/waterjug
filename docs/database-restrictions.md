@@ -46,10 +46,15 @@ The `public.handle_new_user()` security-definer function exists only for the
 `auth.users` trigger. It uses an empty `search_path` and is not executable by
 Data API roles.
 
+The `public.ensure_game_rating(bigint)` RPC is deliberately executable only by
+`authenticated`. It is security-invoker, uses an empty `search_path`, derives
+the inserted `user_id` from `auth.uid()`, and relies on the rating insert policy
+plus the `(user_id, game_id)` key for owner isolation and idempotency.
+
 ## Verification
 
 The pgTAP suite in
-`supabase/tests/` contains 96 top-level assertions across four files. Generated assertions
+`supabase/tests/` contains 99 top-level assertions across four files. Generated assertions
 exercise many cases internally rather than inflating the TAP count. The suite
 verifies:
 
@@ -83,6 +88,10 @@ supabase start
 supabase db reset
 supabase test db
 ```
+
+The July 25 migrations intentionally use distinct versions in dependency order:
+profile usernames at `20260725000000`, the default-rating RPC at
+`20260725010000`, and this consolidated hardening at `20260725055352`.
 
 The tests run inside a transaction and roll back all fixture users and data.
 The concurrency suite uses separately committed, uniquely keyed fixtures

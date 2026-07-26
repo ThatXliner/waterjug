@@ -156,12 +156,25 @@ describeLocal('default-rating database invariants', () => {
 	});
 
 	test('persists supported boundary and subnormal defaults exactly', async () => {
+		const { data: initialGame, error: initialGameError } = await admin
+			.from('games')
+			.select('rating_configuration_revision')
+			.eq('game_id', gameId)
+			.single();
+		expect(initialGameError).toBeNull();
+		let revision = initialGame!.rating_configuration_revision;
+
 		for (const defaultRating of [0, Number.MIN_VALUE, 1_000_000]) {
 			const configuration = configurationWithDefault(defaultRating);
+			const nextRevision = revision + 1;
 			const { error } = await admin
 				.from('games')
-				.update({ rating_configuration: configuration })
-				.eq('game_id', gameId);
+				.update({
+					rating_configuration: configuration,
+					rating_configuration_revision: nextRevision
+				})
+				.eq('game_id', gameId)
+				.eq('rating_configuration_revision', revision);
 			expect(error).toBeNull();
 
 			const { data: persisted } = await admin
@@ -170,12 +183,18 @@ describeLocal('default-rating database invariants', () => {
 				.eq('game_id', gameId)
 				.single();
 			expect(persisted?.rating_configuration).toEqual(configuration);
+			revision = nextRevision;
 		}
 
+		const resetRevision = revision + 1;
 		const { error } = await admin
 			.from('games')
-			.update({ rating_configuration: DEFAULT_RATING_CONFIGURATION })
-			.eq('game_id', gameId);
+			.update({
+				rating_configuration: DEFAULT_RATING_CONFIGURATION,
+				rating_configuration_revision: resetRevision
+			})
+			.eq('game_id', gameId)
+			.eq('rating_configuration_revision', revision);
 		expect(error).toBeNull();
 	});
 
@@ -193,11 +212,22 @@ describeLocal('default-rating database invariants', () => {
 				(configuration) => `${configuration.defaultRating}:${configuration.glicko.initialDeviation}`
 			)
 		]);
+		const { data: initialGame, error: initialGameError } = await admin
+			.from('games')
+			.select('rating_configuration_revision')
+			.eq('game_id', gameId)
+			.single();
+		expect(initialGameError).toBeNull();
+		const initialRevision = initialGame!.rating_configuration_revision;
 		const updates = possibleConfigurations.map((configuration) =>
 			owner.client
 				.from('games')
-				.update({ rating_configuration: configuration })
+				.update({
+					rating_configuration: configuration,
+					rating_configuration_revision: initialRevision + 1
+				})
 				.eq('game_id', gameId)
+				.eq('rating_configuration_revision', initialRevision)
 		);
 		const joins = joiningUsers.flatMap((user) =>
 			Array.from({ length: 5 }, () => user.client.rpc('ensure_game_rating', { p_game_id: gameId }))
@@ -230,13 +260,20 @@ describeLocal('default-rating database invariants', () => {
 
 		const snapshots = new Map(ratings?.map(({ user_id, rating }) => [user_id, rating]));
 		const finalConfiguration = configurationForJoin(1777, 177);
+		const { data: currentGame, error: currentGameError } = await admin
+			.from('games')
+			.select('rating_configuration_revision')
+			.eq('game_id', gameId)
+			.single();
+		expect(currentGameError).toBeNull();
 		const { error: finalUpdateError } = await owner.client
 			.from('games')
 			.update({
 				rating_configuration: finalConfiguration,
-				rating_configuration_revision: 2
+				rating_configuration_revision: currentGame!.rating_configuration_revision + 1
 			})
-			.eq('game_id', gameId);
+			.eq('game_id', gameId)
+			.eq('rating_configuration_revision', currentGame!.rating_configuration_revision);
 		expect(finalUpdateError).toBeNull();
 
 		const latePlayer = users[10];

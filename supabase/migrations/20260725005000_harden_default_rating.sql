@@ -1,4 +1,4 @@
--- Make the grants used by the existing RLS policies explicit so a clean
+-- Make the authenticated grants used by the existing RLS policies explicit so a clean
 -- migration replay has the same access model as the hosted project.
 GRANT SELECT ON TABLE "public"."games" TO anon, authenticated;
 GRANT INSERT ON TABLE "public"."games" TO authenticated;

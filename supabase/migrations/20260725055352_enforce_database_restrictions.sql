@@ -181,6 +181,17 @@ on public.games
 for each row
 execute function private.enforce_game_rating_configuration_revision();
 
+-- This authenticated RPC snapshots a public game's current defaults into the
+-- caller's own RLS-protected rating row. Keep it callable only by authenticated
+-- users and remove the mutable public schema from function name resolution.
+alter function public.ensure_game_rating(bigint) set search_path = '';
+revoke all privileges
+on function public.ensure_game_rating(bigint)
+from public, anon;
+grant execute
+on function public.ensure_game_rating(bigint)
+to authenticated;
+
 drop policy if exists "Enable read access for all users" on public.profiles;
 drop policy if exists "Enable read access for own profile" on public.profiles;
 create policy "Profiles are publicly readable"
