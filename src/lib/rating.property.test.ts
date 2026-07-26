@@ -9,6 +9,7 @@ import {
 	nextRatingConfigurationRevision,
 	parseRatingConfiguration,
 	parseRatingConfigurationRevision,
+	parseRatingPeriodDaysFormValue,
 	RatingCalculationError,
 	RatingConfigurationConflictError,
 	RatingConfigurationError,
@@ -117,6 +118,15 @@ const ratingState: fc.Arbitrary<RatingState> = fc.record({
 const outcome = fc.constantFrom<0 | 0.5 | 1>(0, 0.5, 1);
 const calculationTime = new Date('2026-07-24T00:00:00.000Z');
 
+function formatWithOffset(date: Date, offsetMinutes: number) {
+	const local = new Date(date.getTime() + offsetMinutes * 60_000);
+	const sign = offsetMinutes < 0 ? '-' : '+';
+	const absoluteOffset = Math.abs(offsetMinutes);
+	const hours = String(Math.floor(absoluteOffset / 60)).padStart(2, '0');
+	const minutes = String(absoluteOffset % 60).padStart(2, '0');
+	return `${local.toISOString().slice(0, -1)}${sign}${hours}:${minutes}`;
+}
+
 describe('rating configuration properties', () => {
 	test('valid configurations survive JSON persistence round trips', () => {
 		fc.assert(
@@ -162,6 +172,39 @@ describe('rating configuration properties', () => {
 				})
 			);
 		}
+	});
+
+	test('period form parsing accepts exactly bounded plain-decimal values', () => {
+		fc.assert(
+			fc.property(
+				fc.double({
+					min: 1 / 24,
+					max: 3650,
+					noNaN: true,
+					noDefaultInfinity: true
+				}),
+				(periodDays) => {
+					const decimal = periodDays.toString();
+					fc.pre(!/[eE]/.test(decimal));
+					expect(parseRatingPeriodDaysFormValue(decimal)).toBe(periodDays);
+				}
+			),
+			{ numRuns: 1000 }
+		);
+
+		fc.assert(
+			fc.property(fc.anything(), (value) => {
+				const valid =
+					typeof value === 'string' &&
+					/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(value.trim()) &&
+					Number.isFinite(Number(value.trim())) &&
+					Number(value.trim()) >= 1 / 24 &&
+					Number(value.trim()) <= 3650;
+				fc.pre(!valid);
+				expect(() => parseRatingPeriodDaysFormValue(value)).toThrow(RatingConfigurationError);
+			}),
+			{ numRuns: 1000 }
+		);
 	});
 
 	test('revision values are monotonic safe integers and reject overflow', () => {
@@ -228,6 +271,102 @@ describe('rating configuration properties', () => {
 });
 
 describe('rating calculation properties', () => {
+	test('Glicko inactivity rolls over exactly at generated period boundaries', () => {
+		fc.assert(
+			fc.property(
+				fc.integer({ min: 1, max: 3650 * 24 }),
+				fc.integer({ min: 1, max: 20 }),
+				(periodHours, completedPeriods) => {
+					const periodMilliseconds = periodHours * 60 * 60 * 1000;
+					const now = new Date('2030-01-01T00:00:00.000Z');
+					const configuration = parseRatingConfiguration({
+						system: 'glicko',
+						periodDays: periodHours / 24,
+						glicko: {
+							initialDeviation: 50,
+							maxDeviation: 1000,
+							periodDeviationIncrease: 10,
+							scale: 400
+						}
+					});
+					const opponent = { rating: 1200, deviation: 100 };
+					const resultAt = calculateRating(
+						configuration,
+						{
+							rating: 1200,
+							deviation: 50,
+							lastRatedAt: new Date(
+								now.getTime() - completedPeriods * periodMilliseconds
+							).toISOString()
+						},
+						opponent,
+						1,
+						now
+					);
+					const resultBefore = calculateRating(
+						configuration,
+						{
+							rating: 1200,
+							deviation: 50,
+							lastRatedAt: new Date(
+								now.getTime() - completedPeriods * periodMilliseconds + 1
+							).toISOString()
+						},
+						opponent,
+						1,
+						now
+					);
+
+					expect(resultAt.rating).toBeGreaterThan(resultBefore.rating);
+					expect(resultAt.deviation).toBeGreaterThan(resultBefore.deviation!);
+				}
+			),
+			{ numRuns: 1000 }
+		);
+	});
+
+	test('timezone representations of the same instants calculate identically', () => {
+		fc.assert(
+			fc.property(
+				fc.integer({ min: 1, max: 3650 * 24 }),
+				fc.integer({ min: 0, max: 20 }),
+				fc.integer({ min: -48, max: 56 }),
+				(periodHours, completedPeriods, offsetQuarterHours) => {
+					const now = new Date('2026-07-25T12:00:00.000Z');
+					const lastRatedAt = new Date(
+						now.getTime() - completedPeriods * periodHours * 60 * 60 * 1000
+					);
+					const configuration = parseRatingConfiguration({
+						system: 'glicko',
+						periodDays: periodHours / 24
+					});
+					const player = { rating: 1200, deviation: 100 };
+					const opponent = { rating: 1200, deviation: 100 };
+					const utc = calculateRating(
+						configuration,
+						{ ...player, lastRatedAt: lastRatedAt.toISOString() },
+						opponent,
+						1,
+						now
+					);
+					const offset = calculateRating(
+						configuration,
+						{
+							...player,
+							lastRatedAt: formatWithOffset(lastRatedAt, offsetQuarterHours * 15)
+						},
+						opponent,
+						1,
+						now
+					);
+
+					expect(offset).toEqual(utc);
+				}
+			),
+			{ numRuns: 1000 }
+		);
+	});
+
 	test('valid calculations produce finite persisted states and advance time', () => {
 		fc.assert(
 			fc.property(

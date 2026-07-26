@@ -4,6 +4,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
 import type { Database } from '$lib/supabase';
+import { requireAuthenticatedUserId } from '$lib/server/auth';
 import {
 	commitRatingConfiguration,
 	createRatingCalculator,
@@ -125,7 +126,9 @@ async function getRatingFor(
 }
 
 export const actions: Actions = {
-	default: async ({ request, params, locals: { safeGetSession } }) => {
+	rate: async ({ request, params, locals: { safeGetSession } }) => {
+		const { user } = await safeGetSession();
+		const userId = requireAuthenticatedUserId(user);
 		const formData = await request.formData();
 		const winner = formData.get('winner')?.toString();
 		if (!winner) return fail(400, { ratingError: 'Select a winner.' });
@@ -133,12 +136,7 @@ export const actions: Actions = {
 			PUBLIC_SUPABASE_URL,
 			SUPABASE_SERVICE_ROLE_KEY
 		);
-		const { session } = await safeGetSession();
-		const user = session?.user?.id;
-		if (user == null) {
-			throw new Error('No user');
-		}
-		if (winner === user) return fail(400, { ratingError: 'You cannot play against yourself.' });
+		if (winner === userId) return fail(400, { ratingError: 'You cannot play against yourself.' });
 		const gameId = parseInt(params.id);
 		const { data: game, error: gameError } = await supabaseServer
 			.from('games')
@@ -147,7 +145,7 @@ export const actions: Actions = {
 			.single();
 		if (gameError) throw gameError;
 		const configuration = parseRatingConfiguration(game.rating_configuration);
-		const oldYou = await getRatingFor(supabaseServer, gameId, user, configuration);
+		const oldYou = await getRatingFor(supabaseServer, gameId, userId, configuration);
 		const oldThem = await getRatingFor(supabaseServer, gameId, winner, configuration);
 		const now = new Date();
 		const match = createRatingCalculator(configuration).calculateMatch(oldYou, oldThem, 0, now);
@@ -165,7 +163,7 @@ export const actions: Actions = {
 					}
 				})
 				.eq('game_id', gameId)
-				.eq('user_id', user)
+				.eq('user_id', userId)
 				.select();
 			if (error != null) throw error;
 		}
@@ -187,7 +185,7 @@ export const actions: Actions = {
 
 	createTournament: async ({ request, params, locals: { supabase, safeGetSession } }) => {
 		const { user } = await safeGetSession();
-		if (!user) error(401, 'No user');
+		const userId = requireAuthenticatedUserId(user);
 
 		const formData = await request.formData();
 		const name = formData.get('name')?.toString().trim();
@@ -203,7 +201,7 @@ export const actions: Actions = {
 		const gameId = parseInt(params.id);
 		const { data: tournament, error: insertErr } = await supabase
 			.from('tournaments')
-			.insert({ game_id: gameId, name, type, created_by: user.id, status: 'pending' })
+			.insert({ game_id: gameId, name, type, created_by: userId, status: 'pending' })
 			.select('tournament_id')
 			.single();
 
@@ -224,7 +222,7 @@ export const actions: Actions = {
 
 	configure: async ({ request, params, locals: { supabase, safeGetSession } }) => {
 		const { user } = await safeGetSession();
-		if (!user) error(401, 'No user');
+		const userId = requireAuthenticatedUserId(user);
 		const formData = await request.formData();
 		let configuration;
 		let expectedRevision;
@@ -245,7 +243,7 @@ export const actions: Actions = {
 			.eq('game_id', parseInt(params.id))
 			.single();
 		if (fetchError) return fail(500, { configurationError: fetchError.message });
-		if (existing.created_by !== user.id)
+		if (existing.created_by !== userId)
 			error(403, 'Only the game owner can change rating settings');
 		try {
 			await commitRatingConfiguration(

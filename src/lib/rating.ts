@@ -202,13 +202,32 @@ export function parseRatingConfiguration(value: unknown): RatingConfiguration {
 	return configuration;
 }
 
+const DECIMAL_FORM_NUMBER = /^(?:\d+(?:\.\d*)?|\.\d+)$/;
+
+/**
+ * Parse the rating period at the HTTP form boundary. Persisted configurations
+ * contain JSON numbers, while forms contain strings; accepting only plain
+ * decimal syntax prevents timestamps, units, hexadecimal, and exponent notation
+ * from being silently coerced by Number().
+ */
+export function parseRatingPeriodDaysFormValue(value: unknown) {
+	const candidate =
+		typeof value === 'string' && DECIMAL_FORM_NUMBER.test(value.trim())
+			? Number(value.trim())
+			: NaN;
+	const issues: string[] = [];
+	const periodDays = numberField(candidate, NaN, 'periodDays', 1 / 24, 3650, issues);
+	if (issues.length > 0) throw new RatingConfigurationError(issues);
+	return periodDays;
+}
+
 export function parseRatingConfigurationForm(formData: FormData) {
 	const number = (field: string) => Number(formData.get(field));
 	return parseRatingConfiguration({
 		version: 1,
 		system: formData.get('system')?.toString(),
 		defaultRating: number('defaultRating'),
-		periodDays: number('periodDays'),
+		periodDays: parseRatingPeriodDaysFormValue(formData.get('periodDays')),
 		glicko: {
 			initialDeviation: number('glickoInitialDeviation'),
 			maxDeviation: number('glickoMaxDeviation'),

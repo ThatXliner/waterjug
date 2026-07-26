@@ -54,7 +54,7 @@
 <dialog bind:this={modal} class="modal">
 	<div class="modal-box">
 		<h3 class="font-bold text-lg">I lost against...</h3>
-		<form method="POST">
+		<form method="POST" action="?/rate">
 			<select
 				class="select select-bordered w-full max-w-xs"
 				bind:value={winner}
