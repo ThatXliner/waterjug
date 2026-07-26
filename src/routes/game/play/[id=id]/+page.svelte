@@ -182,6 +182,7 @@
 						value={configuration.defaultRating}
 						min="0"
 						max="1000000"
+						step="any"
 						required
 					/>
 				</label>

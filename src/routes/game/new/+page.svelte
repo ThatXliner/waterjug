@@ -46,6 +46,7 @@
 							value="1200"
 							min="0"
 							max="1000000"
+							step="any"
 							required
 						/>
 					</label>

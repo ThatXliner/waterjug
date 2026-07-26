@@ -8,6 +8,7 @@ import {
 	DEFAULT_RATING_CONFIGURATION,
 	nextRatingConfigurationRevision,
 	parseRatingConfiguration,
+	parseRatingConfigurationNumber,
 	parseRatingConfigurationRevision,
 	parseRatingPeriodDaysFormValue,
 	RatingCalculationError,
@@ -128,6 +129,49 @@ function formatWithOffset(date: Date, offsetMinutes: number) {
 }
 
 describe('rating configuration properties', () => {
+	test('default-rating form values accept exactly finite in-range decimal syntax', () => {
+		fc.assert(
+			fc.property(fc.string({ maxLength: 200 }), (submitted) => {
+				const normalized = submitted.trim();
+				const decimalSyntax = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
+				const numeric = Number(normalized);
+				const parsed = parseRatingConfigurationNumber(submitted);
+
+				if (!decimalSyntax.test(normalized) || !Number.isFinite(numeric)) {
+					expect(Number.isNaN(parsed)).toBe(true);
+				} else if (numeric < 0 || numeric > 1_000_000) {
+					expect(parsed).toBe(numeric);
+					expect(() => parseRatingConfiguration({ defaultRating: parsed })).toThrow(
+						RatingConfigurationError
+					);
+				} else {
+					expect(parsed).toBe(numeric);
+					expect(parseRatingConfiguration({ defaultRating: parsed }).defaultRating).toBe(numeric);
+				}
+			}),
+			{ numRuns: 10_000, seed: 0xa11ce }
+		);
+	});
+
+	test('default-rating form parsing preserves arbitrary valid finite values', () => {
+		fc.assert(
+			fc.property(
+				fc.double({
+					min: 0,
+					max: 1_000_000,
+					noNaN: true,
+					noDefaultInfinity: true
+				}),
+				(value) => {
+					const parsed = parseRatingConfigurationNumber(String(value));
+					expect(parsed).toBe(value);
+					expect(parseRatingConfiguration({ defaultRating: parsed }).defaultRating).toBe(value);
+				}
+			),
+			{ numRuns: 2_000, seed: 0x9d3f }
+		);
+	});
+
 	test('valid configurations survive JSON persistence round trips', () => {
 		fc.assert(
 			fc.property(validConfiguration, (configuration) => {
