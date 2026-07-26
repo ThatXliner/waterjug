@@ -1,5 +1,6 @@
 <script>
 	import { enhance } from '$app/forms';
+	import { closeDialog, showDialog } from '$lib/dialog';
 
 	let { data, form } = $props();
 	let dbData = $derived(data.data);
@@ -12,18 +13,15 @@
 	let isOwner = $derived(data.isOwner);
 
 	/** @param {string} userId */
-	function displayName(userId) {
+	function displayName(userId = '') {
 		return profileMap[userId] || userId.slice(0, 8);
 	}
 
 	let sorted = $derived([...dbData].sort((a, b) => b.rating - a.rating));
-	/** @type {HTMLDialogElement | null} */
-	let modal = $state(null);
+	let modal = $state();
 	let winner = $state('');
-	/** @type {HTMLDialogElement | null} */
-	let tournamentModal = $state(null);
-	/** @type {HTMLDialogElement | null} */
-	let configurationModal = $state(null);
+	let tournamentModal = $state();
+	let configurationModal = $state();
 	let configurationSystem = $state('glicko');
 	let tournamentForm = $state({
 		name: '',
@@ -32,17 +30,17 @@
 	});
 
 	function openModal() {
-		modal?.showModal();
+		showDialog(modal);
 	}
 	function openTournamentModal() {
-		tournamentModal?.showModal();
+		showDialog(tournamentModal);
 	}
 	function openConfigurationModal() {
 		configurationSystem = configuration.system;
-		configurationModal?.showModal();
+		showDialog(configurationModal);
 	}
 	/** @param {string} userId */
-	function toggleParticipant(userId) {
+	function toggleParticipant(userId = '') {
 		if (tournamentForm.selectedParticipants.has(userId)) {
 			tournamentForm.selectedParticipants.delete(userId);
 		} else {
@@ -71,7 +69,7 @@
 				{/each}
 			</select>
 			<div class="modal-action">
-				<button class="btn" type="button" onclick={() => modal?.close()}>Close</button>
+				<button class="btn" type="button" onclick={() => closeDialog(modal)}>Close</button>
 				<button class="btn btn-primary" type="submit" disabled={!winner}>Submit</button>
 			</div>
 		</form>
@@ -88,7 +86,7 @@
 			method="POST"
 			action="?/createTournament"
 			use:enhance={() => {
-				tournamentModal?.close();
+				closeDialog(tournamentModal);
 			}}
 		>
 			<div class="form-control mb-3">
@@ -149,7 +147,8 @@
 				<p class="text-error text-sm mb-2">{form.tournamentError}</p>
 			{/if}
 			<div class="modal-action">
-				<button class="btn" type="button" onclick={() => tournamentModal?.close()}>Close</button>
+				<button class="btn" type="button" onclick={() => closeDialog(tournamentModal)}>Close</button
+				>
 				<button class="btn btn-primary" type="submit">Create</button>
 			</div>
 		</form>
@@ -301,7 +300,9 @@
 				Changing the starting rating affects new players only; existing ratings are preserved.
 			</p>
 			<div class="modal-action">
-				<button class="btn" type="button" onclick={() => configurationModal?.close()}>Close</button>
+				<button class="btn" type="button" onclick={() => closeDialog(configurationModal)}
+					>Close</button
+				>
 				<button class="btn btn-primary" type="submit">Save configuration</button>
 			</div>
 		</form>
