@@ -196,7 +196,7 @@
 				<label class="form-control">
 					<span class="label-text">System</span>
 					<select class="select select-bordered" name="system" bind:value={configurationSystem}>
-						<option value="glicko">Glicko</option>
+						<option value="glicko">Glicko-2</option>
 						<option value="elo">Elo</option>
 						<option value="custom">Custom</option>
 					</select>
@@ -229,7 +229,7 @@
 				</label>
 			</div>
 			<fieldset class="rounded-box border border-base-300 p-3">
-				<legend class="px-2 font-semibold">Glicko</legend>
+				<legend class="px-2 font-semibold">Glicko-2</legend>
 				<div class="grid gap-3 sm:grid-cols-2">
 					<label class="form-control"
 						><span class="label-text">Initial deviation</span><input
@@ -256,25 +256,25 @@
 						/></label
 					>
 					<label class="form-control"
-						><span class="label-text">Deviation increase</span><input
+						><span class="label-text">Initial volatility</span><input
 							class="input input-bordered"
-							name="glickoPeriodDeviationIncrease"
+							name="glickoInitialVolatility"
 							type="number"
-							value={configuration.glicko.periodDeviationIncrease}
-							min="0"
-							max="1000"
+							value={configuration.glicko.initialVolatility}
+							min="0.000001"
+							max="0.2"
 							step="any"
 							required
 						/></label
 					>
 					<label class="form-control"
-						><span class="label-text">Scale</span><input
+						><span class="label-text">System constant (τ)</span><input
 							class="input input-bordered"
-							name="glickoScale"
+							name="glickoTau"
 							type="number"
-							value={configuration.glicko.scale}
-							min="1"
-							max="10000"
+							value={configuration.glicko.tau}
+							min="0.3"
+							max="1.2"
 							step="any"
 							required
 						/></label

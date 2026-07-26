@@ -97,7 +97,7 @@ async function addRatings(targetGameId: number, actors: Actor[]) {
 			user_id: userIds[actor],
 			rating: 1200,
 			type: 'glicko',
-			other_data: { deviation: 350 }
+			other_data: { deviation: 350, volatility: 0.06 }
 		}))
 	);
 	expectNoError(error, `create ratings for game ${targetGameId}`);

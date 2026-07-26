@@ -11,7 +11,7 @@ LANGUAGE sql
 IMMUTABLE
 AS $$
 	SELECT jsonb_build_object(
-		'version', 1,
+		'version', 2,
 		'system', 'glicko',
 		'defaultRating', 1200,
 		'periodDays', 1,
@@ -44,7 +44,7 @@ SELECT lives_ok(
 		VALUES (
 			'glicko-boundary-min',
 			pg_temp.rating_configuration(
-				'{"initialDeviation":1,"maxDeviation":1,"periodDeviationIncrease":0,"scale":1}'
+				'{"initialDeviation":1,"maxDeviation":1,"initialVolatility":0.000001,"tau":0.3}'
 			)
 		)
 	$$,
@@ -57,7 +57,7 @@ SELECT lives_ok(
 		VALUES (
 			'glicko-boundary-max',
 			pg_temp.rating_configuration(
-				'{"initialDeviation":1000,"maxDeviation":1000,"periodDeviationIncrease":1000,"scale":10000}'
+				'{"initialDeviation":1000,"maxDeviation":1000,"initialVolatility":0.2,"tau":1.2}'
 			)
 		)
 	$$,
@@ -66,43 +66,43 @@ SELECT lives_ok(
 
 SELECT ok(
 	pg_temp.glicko_configuration_rejected(
-		'{"initialDeviation":0,"maxDeviation":350,"periodDeviationIncrease":63.2,"scale":400}'
+		'{"initialDeviation":0,"maxDeviation":350,"initialVolatility":0.06,"tau":0.5}'
 	),
 	'rejects a zero initial deviation'
 );
 SELECT ok(
 	pg_temp.glicko_configuration_rejected(
-		'{"initialDeviation":350,"maxDeviation":1001,"periodDeviationIncrease":63.2,"scale":400}'
+		'{"initialDeviation":350,"maxDeviation":1001,"initialVolatility":0.06,"tau":0.5}'
 	),
 	'rejects a maximum deviation above the supported bound'
 );
 SELECT ok(
 	pg_temp.glicko_configuration_rejected(
-		'{"initialDeviation":351,"maxDeviation":350,"periodDeviationIncrease":63.2,"scale":400}'
+		'{"initialDeviation":351,"maxDeviation":350,"initialVolatility":0.06,"tau":0.5}'
 	),
 	'rejects an initial deviation above the maximum deviation'
 );
 SELECT ok(
 	pg_temp.glicko_configuration_rejected(
-		'{"initialDeviation":350,"maxDeviation":350,"periodDeviationIncrease":-1,"scale":400}'
+		'{"initialDeviation":350,"maxDeviation":350,"initialVolatility":0,"tau":0.5}'
 	),
-	'rejects a negative period deviation increase'
+	'rejects a zero initial volatility'
 );
 SELECT ok(
 	pg_temp.glicko_configuration_rejected(
-		'{"initialDeviation":350,"maxDeviation":350,"periodDeviationIncrease":63.2,"scale":10001}'
+		'{"initialDeviation":350,"maxDeviation":350,"initialVolatility":0.06,"tau":1.21}'
 	),
-	'rejects a scale above the supported bound'
+	'rejects tau above the supported bound'
 );
 SELECT ok(
 	pg_temp.glicko_configuration_rejected(
-		'{"initialDeviation":"350","maxDeviation":350,"periodDeviationIncrease":63.2,"scale":400}'
+		'{"initialDeviation":"350","maxDeviation":350,"initialVolatility":0.06,"tau":0.5}'
 	),
 	'rejects non-numeric Glicko parameters'
 );
 SELECT ok(
 	pg_temp.glicko_configuration_rejected(
-		'{"initialDeviation":350,"maxDeviation":350,"scale":400}'
+		'{"initialDeviation":350,"maxDeviation":350,"tau":0.5}'
 	),
 	'rejects a missing Glicko parameter'
 );
@@ -120,8 +120,8 @@ SELECT lives_ok(
 				jsonb_build_object(
 					'initialDeviation', 1 + (value % 999),
 					'maxDeviation', 1000,
-					'periodDeviationIncrease', value % 1001,
-					'scale', 1 + (value % 10000)
+					'initialVolatility', 0.000001 + (value % 1000) * 0.000199,
+					'tau', 0.3 + (value % 901) * 0.001
 				)
 			)
 		FROM generate_series(1, 1000) AS value

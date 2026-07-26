@@ -35,7 +35,7 @@
 					<label class="form-control">
 						<span class="label-text mb-1">Rating system</span>
 						<select class="select select-bordered" name="system" bind:value={system}>
-							<option value="glicko">Glicko</option>
+							<option value="glicko">Glicko-2</option>
 							<option value="elo">Elo</option>
 							<option value="custom">Custom formula</option>
 						</select>
@@ -70,7 +70,7 @@
 
 				{#if system === 'glicko'}
 					<fieldset class="rounded-box border border-base-300 p-4">
-						<legend class="px-2 font-semibold">Glicko parameters</legend>
+						<legend class="px-2 font-semibold">Glicko-2 parameters</legend>
 						<div class="grid gap-4 sm:grid-cols-2">
 							<label class="form-control"
 								><span class="label-text">Initial deviation</span><input
@@ -97,25 +97,25 @@
 								/></label
 							>
 							<label class="form-control"
-								><span class="label-text">Deviation increase per period</span><input
+								><span class="label-text">Initial volatility</span><input
 									class="input input-bordered"
-									name="glickoPeriodDeviationIncrease"
+									name="glickoInitialVolatility"
 									type="number"
-									value="63.2"
-									min="0"
-									max="1000"
+									value="0.06"
+									min="0.000001"
+									max="0.2"
 									step="any"
 									required
 								/></label
 							>
 							<label class="form-control"
-								><span class="label-text">Rating scale</span><input
+								><span class="label-text">System constant (τ)</span><input
 									class="input input-bordered"
-									name="glickoScale"
+									name="glickoTau"
 									type="number"
-									value="400"
-									min="1"
-									max="10000"
+									value="0.5"
+									min="0.3"
+									max="1.2"
 									step="any"
 									required
 								/></label
@@ -125,8 +125,8 @@
 				{:else}
 					<input type="hidden" name="glickoInitialDeviation" value="350" />
 					<input type="hidden" name="glickoMaxDeviation" value="350" />
-					<input type="hidden" name="glickoPeriodDeviationIncrease" value="63.2" />
-					<input type="hidden" name="glickoScale" value="400" />
+					<input type="hidden" name="glickoInitialVolatility" value="0.06" />
+					<input type="hidden" name="glickoTau" value="0.5" />
 				{/if}
 
 				{#if system === 'elo'}

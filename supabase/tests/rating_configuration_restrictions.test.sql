@@ -9,8 +9,8 @@ create or replace function pg_temp.rating_configuration(
   period_days double precision default 1,
   initial_deviation double precision default 350,
   max_deviation double precision default 350,
-  deviation_increase double precision default 63.2,
-  glicko_scale double precision default 400,
+  initial_volatility double precision default 0.06,
+  tau double precision default 0.5,
   k_factor double precision default 32,
   elo_scale double precision default 400,
   formula text default 'rating + 32 * (score - expected)'
@@ -20,15 +20,15 @@ language sql
 immutable
 as $$
   select jsonb_build_object(
-    'version', 1,
+    'version', 2,
     'system', 'glicko',
     'defaultRating', default_rating,
     'periodDays', period_days,
     'glicko', jsonb_build_object(
       'initialDeviation', initial_deviation,
       'maxDeviation', max_deviation,
-      'periodDeviationIncrease', deviation_increase,
-      'scale', glicko_scale
+      'initialVolatility', initial_volatility,
+      'tau', tau
     ),
     'elo', jsonb_build_object(
       'kFactor', k_factor,
@@ -328,8 +328,8 @@ select lives_ok(
         1.0 / 24.0,
         1,
         1,
-        0,
-        1,
+        0.000001,
+        0.3,
         0.01,
         1
       )
@@ -349,8 +349,8 @@ select lives_ok(
         3650,
         1000,
         1000,
-        1000,
-        10000,
+        0.2,
+        1.2,
         1000,
         10000,
         repeat('x', 500)

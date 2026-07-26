@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import {
 	calculateRating,
+	calculateGlicko2RatingPeriod,
 	compileRatingFormula,
 	DEFAULT_RATING_CONFIGURATION,
 	parseRatingConfiguration,
@@ -15,6 +16,28 @@ import {
 describe('rating configuration', () => {
 	test('fills defaults and returns a complete versioned model', () => {
 		expect(parseRatingConfiguration({})).toEqual(DEFAULT_RATING_CONFIGURATION);
+	});
+
+	test('upgrades legacy Glicko configuration to Glicko-2 defaults', () => {
+		expect(
+			parseRatingConfiguration({
+				version: 1,
+				glicko: {
+					initialDeviation: 200,
+					maxDeviation: 300,
+					periodDeviationIncrease: 50,
+					scale: 400
+				}
+			})
+		).toMatchObject({
+			version: 2,
+			glicko: {
+				initialDeviation: 200,
+				maxDeviation: 300,
+				initialVolatility: 0.06,
+				tau: 0.5
+			}
+		});
 	});
 
 	test('rejects invalid values with actionable field names', () => {
@@ -84,13 +107,40 @@ describe('rating configuration', () => {
 		formData.set('periodDays', '1');
 		formData.set('glickoInitialDeviation', '350');
 		formData.set('glickoMaxDeviation', '350');
-		formData.set('glickoPeriodDeviationIncrease', '63.2');
-		formData.set('glickoScale', '400');
+		formData.set('glickoInitialVolatility', '0.06');
+		formData.set('glickoTau', '0.5');
 		formData.set('eloKFactor', '32');
 		formData.set('eloScale', '400');
 		formData.set('customFormula', DEFAULT_RATING_CONFIGURATION.custom.formula);
 
 		expect(() => parseRatingConfigurationForm(formData)).toThrow(RatingConfigurationError);
+	});
+
+	test('parses Glicko-2 form controls into a version 2 configuration', () => {
+		const formData = new FormData();
+		formData.set('system', 'glicko');
+		formData.set('defaultRating', '1500');
+		formData.set('periodDays', '7');
+		formData.set('glickoInitialDeviation', '200');
+		formData.set('glickoMaxDeviation', '350');
+		formData.set('glickoInitialVolatility', '0.06');
+		formData.set('glickoTau', '0.5');
+		formData.set('eloKFactor', '32');
+		formData.set('eloScale', '400');
+		formData.set('customFormula', DEFAULT_RATING_CONFIGURATION.custom.formula);
+
+		expect(parseRatingConfigurationForm(formData)).toMatchObject({
+			version: 2,
+			system: 'glicko',
+			defaultRating: 1500,
+			periodDays: 7,
+			glicko: {
+				initialDeviation: 200,
+				maxDeviation: 350,
+				initialVolatility: 0.06,
+				tau: 0.5
+			}
+		});
 	});
 
 	test('rejects resource exhaustion and invalid arity with located formula errors', () => {
@@ -115,6 +165,30 @@ describe('rating configuration', () => {
 });
 
 describe('configured calculations', () => {
+	test('matches the official Glicko-2 reference rating period', () => {
+		const result = calculateGlicko2RatingPeriod(
+			parseRatingConfiguration({
+				system: 'glicko',
+				defaultRating: 1500,
+				glicko: {
+					initialDeviation: 350,
+					maxDeviation: 1000,
+					initialVolatility: 0.06,
+					tau: 0.5
+				}
+			}),
+			{ rating: 1500, deviation: 200, volatility: 0.06 },
+			[
+				{ rating: 1400, deviation: 30, score: 1 },
+				{ rating: 1550, deviation: 100, score: 0 },
+				{ rating: 1700, deviation: 300, score: 0 }
+			]
+		);
+		expect(result.rating).toBeCloseTo(1464.06, 1);
+		expect(result.deviation).toBeCloseTo(151.52, 1);
+		expect(result.volatility).toBeCloseTo(0.05999, 4);
+	});
+
 	test('uses configured Elo parameters', () => {
 		const config = parseRatingConfiguration({ system: 'elo', elo: { kFactor: 40, scale: 200 } });
 		expect(calculateRating(config, { rating: 1200 }, { rating: 1200 }, 1).rating).toBe(1220);
@@ -132,8 +206,8 @@ describe('configured calculations', () => {
 			glicko: {
 				initialDeviation: 100,
 				maxDeviation: 350,
-				periodDeviationIncrease: 50,
-				scale: 400
+				initialVolatility: 0.06,
+				tau: 0.5
 			}
 		});
 		const before = calculateRating(
@@ -160,8 +234,8 @@ describe('configured calculations', () => {
 			glicko: {
 				initialDeviation: 100,
 				maxDeviation: 350,
-				periodDeviationIncrease: 50,
-				scale: 400
+				initialVolatility: 0.06,
+				tau: 0.5
 			}
 		});
 		const opponent = { rating: 1200, deviation: 100 };
@@ -206,8 +280,8 @@ describe('configured calculations', () => {
 			glicko: {
 				initialDeviation: 1,
 				maxDeviation: 963,
-				periodDeviationIncrease: 0,
-				scale: 1
+				initialVolatility: 0.06,
+				tau: 0.5
 			}
 		});
 		const result = calculateRating(
