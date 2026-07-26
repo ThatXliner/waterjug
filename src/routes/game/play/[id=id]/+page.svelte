@@ -1,6 +1,7 @@
 <script>
 	import { enhance } from '$app/forms';
 	import { closeDialog, showDialog } from '$lib/dialog';
+	import FormulaEditor from '$lib/FormulaEditor.svelte';
 
 	let { data, form } = $props();
 	let dbData = $derived(data.data);
@@ -31,6 +32,7 @@
 	let tournamentModal = $state();
 	let configurationModal = $state();
 	let configurationSystem = $state('glicko');
+	let configurationFormula = $state('');
 	let tournamentForm = $state({
 		name: '',
 		type: 'bracket',
@@ -48,6 +50,7 @@
 	}
 	function openConfigurationModal() {
 		configurationSystem = configuration.system;
+		configurationFormula = configuration.custom.formula;
 		showDialog(configurationModal);
 	}
 	/** @param {string} userId */
@@ -307,19 +310,20 @@
 					>
 				</div>
 			</fieldset>
-			<label class="form-control">
-				<span class="label-text">Custom formula</span>
-				<input
-					class="input input-bordered font-mono"
+			<div class="form-control">
+				<span id="configurationFormulaLabel" class="label-text">Custom formula</span>
+				<FormulaEditor
+					id="configurationFormula"
 					name="customFormula"
-					value={configuration.custom.formula}
-					maxlength="500"
+					labelledBy="configurationFormulaLabel"
+					describedBy="configurationFormulaHelp"
+					bind:value={configurationFormula}
 					required
 				/>
-				<span class="label-text-alt"
+				<span id="configurationFormulaHelp" class="label-text-alt"
 					>rating, opponentRating, score, expected; abs, min, max, pow, round, floor, ceil</span
 				>
-			</label>
+			</div>
 			{#if form?.configurationError}
 				<p class="text-error text-sm">{form.configurationError}</p>
 			{/if}

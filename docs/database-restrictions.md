@@ -127,9 +127,9 @@ The final migration order is:
   authorization inputs, not secrets; role mutation remains service-only.
 - The merged display-name constraints are `NOT VALID`: new and changed rows are
   checked, but pre-existing rows are not retroactively scanned.
-- Tournament statuses are constrained to declared values, but the product does
-  not yet define a stricter lifecycle graph, so the database does not invent
-  one.
+- Tournament statuses are intentionally flexible labels rather than an enforced
+  lifecycle graph. Creators can organize brackets, rounds, and transitions to
+  fit the game while ownership and declared-value restrictions remain enforced.
 - Custom formula parsing remains application behavior. Formula evaluation runs
   in a dedicated Node worker with an empty environment, a one-second deadline,
   and V8 heap/stack/code limits. PostgreSQL enforces persisted structure, size,

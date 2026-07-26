@@ -56,8 +56,14 @@
 	},
 	"type": "module",
 	"dependencies": {
+		"@codemirror/autocomplete": "^6.20.3",
+		"@codemirror/language": "^6.12.4",
+		"@codemirror/lint": "^6.9.7",
+		"@codemirror/state": "^6.7.1",
+		"@codemirror/view": "^6.43.6",
 		"@supabase/ssr": "^0.12.3",
-		"@supabase/supabase-js": "^2.110.8"
+		"@supabase/supabase-js": "^2.110.8",
+		"codemirror": "^6.0.2"
 	},
 	"overrides": {
 		"estree-walker": "2.0.2"

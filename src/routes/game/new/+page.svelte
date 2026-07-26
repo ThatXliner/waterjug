@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import FormulaEditor from '$lib/FormulaEditor.svelte';
 
 	let { form } = $props();
 	let system = $state('glicko');
 	let inviteOnly = $state(false);
+	let customFormula = $state('rating + 32 * (score - expected)');
 	onMount(() => {
 		if (form?.configurationError) window.alert(form.configurationError);
 	});
@@ -163,20 +165,21 @@
 				{/if}
 
 				{#if system === 'custom'}
-					<label class="form-control">
-						<span class="label-text mb-1">Rating formula</span>
-						<input
-							class="input input-bordered font-mono"
+					<div class="form-control">
+						<span id="newFormulaLabel" class="label-text mb-1">Rating formula</span>
+						<FormulaEditor
+							id="newFormula"
 							name="customFormula"
-							value="rating + 32 * (score - expected)"
-							maxlength="500"
+							labelledBy="newFormulaLabel"
+							describedBy="newFormulaHelp"
+							bind:value={customFormula}
 							required
 						/>
-						<span class="label-text-alt mt-1"
+						<span id="newFormulaHelp" class="label-text-alt mt-1"
 							>Returns the new rating. Variables: rating, opponentRating, score, expected.
 							Functions: abs, min, max, pow, round, floor, ceil.</span
 						>
-					</label>
+					</div>
 				{:else}
 					<input type="hidden" name="customFormula" value="rating + 32 * (score - expected)" />
 				{/if}

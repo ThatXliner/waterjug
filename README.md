@@ -40,11 +40,13 @@ Make a shared leaderboard for chess, table tennis, office foosball, fighting gam
 - **Ratings that understand uncertainty** — an in-house Glicko implementation tracks both rating and rating deviation.
 - **Fast result reporting** — record a head-to-head result and update both players immediately.
 - **A face behind every score** — display names and public profiles keep the leaderboard readable.
-- **Tournament foundations** — create bracket or round-robin events and choose their participants.
+- **Flexible tournament groups** — label an event as bracket or round-robin, choose participants,
+  and organize the actual format however the game requires.
 - **Supabase-backed** — authentication, Postgres persistence, and row-level security are built in.
 
 > [!NOTE]
-> WaterJug is in active development. Core ladders and rating updates work today; tournament play, peer verification, and deeper analytics are still being built.
+> WaterJug is in active development. Core ladders, peer-verified rating updates, and flexible
+> tournament groups work today; deeper analytics are still being built.
 
 ## How it works
 
@@ -109,7 +111,7 @@ Open [localhost:5173](http://localhost:5173), create an account, and start a lad
 
 ```text
 src/
-├── lib/glicko.ts              # Rating engine
+├── lib/rating.ts              # Configurable Glicko, Elo, and custom rating engine
 ├── routes/dashboard/          # Player's games and profile settings
 ├── routes/game/new/           # Ladder creation
 ├── routes/game/play/[id=id]/  # Leaderboard, results, and tournaments
@@ -138,9 +140,8 @@ supabase/
 - [x] Glicko rating updates
 - [x] Email authentication and display names
 - [x] Public player profiles
-- [x] Bracket and round-robin tournament creation
-- [ ] Playable tournament brackets and round-robin scheduling
-- [ ] Peer-verified results
+- [x] Flexible bracket and round-robin tournament groups
+- [x] Peer-verified results
 - [x] Invite-only games
 - [ ] Rating history, predictions, and analytics
 - [ ] Real-time leaderboard updates
