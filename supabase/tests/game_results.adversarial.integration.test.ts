@@ -26,7 +26,7 @@ if (!supabaseUrl || !anonKey || !serviceRoleKey) {
 const clientOptions = {
 	auth: { autoRefreshToken: false, persistSession: false }
 };
-const admin = createClient<Database>(supabaseUrl, serviceRoleKey, clientOptions);
+const admin = createClient<Database>(supabaseUrl!, serviceRoleKey!, clientOptions);
 const clients = {} as Record<Actor, SupabaseClient<Database>>;
 const userIds = {} as Record<Actor, string>;
 const emails = {} as Record<Actor, string>;
@@ -56,7 +56,7 @@ async function createActor(actor: Actor) {
 	emails[actor] = email;
 	createdUserIds.push(data.user.id);
 
-	const client = createClient<Database>(supabaseUrl, anonKey, clientOptions);
+	const client = createClient<Database>(supabaseUrl!, anonKey!, clientOptions);
 	const { error: signInError } = await client.auth.signInWithPassword({ email, password });
 	expectNoError(signInError, `sign in ${actor}`);
 	clients[actor] = client;
@@ -223,9 +223,7 @@ describe('game result state-machine invariants', () => {
 							command.actor === 'opponent' &&
 							(command.decision === 'confirmed' || command.decision === 'disputed');
 						const isMatchingReplay =
-							command.actor === 'opponent' &&
-							command.decision === expectedStatus &&
-							expectedStatus !== 'pending';
+							command.actor === 'opponent' && command.decision === expectedStatus;
 
 						const { error } = await review(command.actor, command.decision, resultId);
 						expect(error === null).toBe(isTransition || isMatchingReplay);
@@ -298,7 +296,7 @@ describe('game result state-machine invariants', () => {
 		for (let run = 0; run < 12; run += 1) {
 			const resultId = await createPendingResult();
 			const ratingsBefore = await fetchRatings();
-			const decisions: ['confirmed', 'disputed'] =
+			const decisions: Array<'confirmed' | 'disputed'> =
 				run % 2 === 0 ? ['confirmed', 'disputed'] : ['disputed', 'confirmed'];
 			const attempts = await Promise.all(
 				decisions.map(async (decision) => ({
