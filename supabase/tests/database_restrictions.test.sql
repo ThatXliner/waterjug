@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(47);
+select plan(49);
 
 -- The five application tables are all exposed through the public schema, so
 -- every one must have RLS enabled.
@@ -95,8 +95,9 @@ select ok(
   'game identity, ownership, name, timestamp, and initial revision are protected'
 );
 select ok(
-  has_column_privilege('authenticated', 'public.profiles', 'display_name', 'update'),
-  'authenticated users can update display names'
+  has_column_privilege('authenticated', 'public.profiles', 'display_name', 'update')
+    and has_column_privilege('authenticated', 'public.profiles', 'username', 'update'),
+  'authenticated users can update display names and usernames'
 );
 select ok(
   not has_column_privilege('authenticated', 'public.profiles', 'created_at', 'update')
@@ -268,10 +269,19 @@ select lives_ok(
   $$update public.profiles set display_name = 'Owner' where user_id = '11111111-1111-4111-8111-111111111111'$$,
   'a user can update their own display name'
 );
+select lives_ok(
+  $$update public.profiles set username = 'database_owner' where user_id = '11111111-1111-4111-8111-111111111111'$$,
+  'a user can update their own username'
+);
 select results_eq(
   $$update public.profiles set display_name = 'Stolen' where user_id = '22222222-2222-4222-8222-222222222222' returning 1$$,
   $$values (1) limit 0$$,
   'a user cannot update another profile'
+);
+select results_eq(
+  $$update public.profiles set username = 'stolen_name' where user_id = '22222222-2222-4222-8222-222222222222' returning 1$$,
+  $$values (1) limit 0$$,
+  'a user cannot update another profile username'
 );
 select throws_ok(
   $$update public.profiles set created_at = now() where user_id = '11111111-1111-4111-8111-111111111111'$$,

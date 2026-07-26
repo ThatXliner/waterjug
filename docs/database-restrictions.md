@@ -17,7 +17,7 @@ policy.
 | Table                     | Anonymous | Authenticated                                                                                                                      | Row restriction                                                                                                                                                |
 | ------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `games`                   | Select    | Select; insert `name`, `created_by`, and `rating_configuration`; update `rating_configuration` and `rating_configuration_revision` | A new game must be owned by `auth.uid()`. Only its owner may update rating settings; identity, ownership, name, timestamp, and initial revision are protected. |
-| `profiles`                | Select    | Select, update `display_name`                                                                                                      | A user may update only their own row. `user_id` and `created_at` are immutable to API users. Rows are inserted only by the Auth trigger.                       |
+| `profiles`                | Select    | Select; update `display_name` and `username`                                                                                       | A user may update only their own row. `user_id` and `created_at` are immutable to API users. Rows are inserted only by the Auth trigger.                       |
 | `ratings`                 | Select    | Select, insert, update                                                                                                             | A user may insert or update only a row whose `user_id` equals `auth.uid()`. Delete is unavailable.                                                             |
 | `tournaments`             | Select    | Select, insert, update                                                                                                             | `created_by` must equal `auth.uid()` on insert and remain so on update. Only the creator can update the row. Delete is unavailable.                            |
 | `tournament_participants` | Select    | Select, insert                                                                                                                     | Only the tournament creator may add participants. Update and delete are unavailable.                                                                           |
@@ -49,7 +49,7 @@ Data API roles.
 ## Verification
 
 The pgTAP suite in
-`supabase/tests/` contains 94 top-level assertions across four files. Generated assertions
+`supabase/tests/` contains 96 top-level assertions across four files. Generated assertions
 exercise many cases internally rather than inflating the TAP count. The suite
 verifies:
 

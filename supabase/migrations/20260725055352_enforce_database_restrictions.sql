@@ -24,7 +24,7 @@ on table public.games
 to authenticated;
 grant usage on sequence public.games_game_id_seq to authenticated;
 
-grant update (display_name) on table public.profiles to authenticated;
+grant update (display_name, username) on table public.profiles to authenticated;
 
 grant insert, update on table public.ratings to authenticated;
 
