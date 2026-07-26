@@ -1,117 +1,137 @@
 # Database restrictions
 
-WaterJug exposes the `public` schema through the Supabase Data API. Access is
-therefore enforced in two layers:
+WaterJug exposes `public` through the Supabase Data API. Authorization is
+enforced in two independent layers:
 
-1. PostgreSQL grants decide which operations the `anon` and `authenticated`
-   roles may attempt.
-2. Row Level Security (RLS) policies decide which rows an allowed operation may
-   affect.
+1. PostgreSQL grants restrict the operations and columns a Data API role may
+   target.
+2. Row Level Security (RLS) restricts the rows visible to an allowed
+   operation.
 
-The server-only `service_role` remains privileged and bypasses RLS. It must
-never be used in a browser or treated as a substitute for a missing end-user
-policy.
+`service_role` is server-only, bypasses RLS, and must never be shipped to a
+browser. Server routes validate the caller before using it. The database also
+limits privileged result-transition RPCs to `service_role`.
 
 ## Required access matrix
 
-| Table                     | Anonymous | Authenticated                                                                                                                      | Row restriction                                                                                                                                                |
-| ------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `games`                   | Select    | Select; insert `name`, `created_by`, and `rating_configuration`; update `rating_configuration` and `rating_configuration_revision` | A new game must be owned by `auth.uid()`. Only its owner may update rating settings; identity, ownership, name, timestamp, and initial revision are protected. |
-| `profiles`                | Select    | Select; update `display_name` and `username`                                                                                       | A user may update only their own row. `user_id` and `created_at` are immutable to API users. Rows are inserted only by the Auth trigger.                       |
-| `ratings`                 | Select    | Select, insert, update                                                                                                             | A user may insert or update only a row whose `user_id` equals `auth.uid()`. Delete is unavailable.                                                             |
-| `tournaments`             | Select    | Select, insert, update                                                                                                             | `created_by` must equal `auth.uid()` on insert and remain so on update. Only the creator can update the row. Delete is unavailable.                            |
-| `tournament_participants` | Select    | Select, insert                                                                                                                     | Only the tournament creator may add participants. Update and delete are unavailable.                                                                           |
+| Relation                  | Anonymous                        | Authenticated                                                                                                    | Row and column restrictions                                                                                                                                                                                                 |
+| ------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `games`                   | Select accessible rows           | Select; insert `name`, `created_by`, `invite_only`, `rating_configuration`; update only configuration + revision | Public games are visible; private games require ownership or a matching invite. Only admins may create games, always as themselves. Only owners may atomically update rating configuration.                                 |
+| `profiles`                | Select                           | Select; update only `display_name`, `username`                                                                   | Profiles are public. Only the owner can update; `user_id`, `created_at`, and `role` are not client-writable. Auth creates rows; only `service_role` can change roles.                                                       |
+| `ratings`                 | Select in accessible games       | Select; insert initialization columns                                                                            | Callers may initialize only their own rating in an accessible game. Direct updates and deletes are denied so peer confirmation cannot be bypassed.                                                                          |
+| `tournaments`             | Select in accessible games       | Select; insert application fields; update only `name`, `type`, `status`                                          | The caller must be the creator and have game access. Identity, game, creator, and timestamp are immutable through the API.                                                                                                  |
+| `tournament_participants` | Select in accessible tournaments | Select; insert only tournament + user                                                                            | Only the tournament creator may add participants. Timestamps, updates, and deletes are unavailable.                                                                                                                         |
+| `game_invites`            | No visible rows                  | Select; insert invite fields; delete                                                                             | Only creators can add/remove invites. Creators see their invites; invitees see only rows matching the signed JWT email. The anonymous table grant exists solely for the games-policy lookup and has no matching row policy. |
+| `game_results`            | None                             | Select participant rows; insert only report identity fields                                                      | Current participants in an accessible game may report. Trigger-owned status, snapshots, review fields, timestamps, updates, and deletes are unavailable.                                                                    |
 
-All five tables must have RLS enabled. Public select access is intentional:
-games, ratings, display names, tournaments, and participant lists are product
-data shown on public game and profile pages.
+All seven relations have RLS enabled. Public access is intentional for profiles
+and for games, ratings, tournaments, and participants whose containing game is
+public. Revoking an invite immediately hides its private game, ratings,
+tournaments, participants, and results.
 
-Database values must also preserve these invariants:
+## RPC and function boundaries
 
-- Game and tournament names contain at least one non-whitespace character.
-- A game rating configuration has exactly the documented version-1 object
-  shape, valid bounded numeric values, a supported system, and a non-blank
-  formula of at most 500 characters.
-- Rating configuration and revision updates are atomic: a changed configuration
-  increments the positive revision by exactly one, and the revision cannot
-  change on its own. This preserves the application's compare-and-set contract
-  under concurrent owner updates.
-- Ratings are finite IEEE-754 values; `NaN` and positive/negative infinity are
-  rejected.
-- Rating metadata is a JSON object.
-- Tournament type and status stay within their declared enum-like check
-  constraints.
+| Function                                    | Boundary                                                                                                                                                                                    |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `create_game(text, boolean, text[], jsonb)` | Authenticated, security-invoker. The admin/owner insert policy remains authoritative for both RPC and direct Data API calls.                                                                |
+| `ensure_game_rating(bigint)`                | Authenticated, security-invoker. Derives `user_id` from `auth.uid()`, snapshots the accessible game's current defaults, and is idempotent.                                                  |
+| `apply_rating_result(...)`                  | `service_role` only. Atomic compare-and-set compatibility RPC.                                                                                                                              |
+| `review_game_result(...)`                   | `service_role` only, security-definer. Enforces opponent review, invite eligibility, pending-to-terminal transitions, snapshots, configuration revision, and rating compare-and-set checks. |
+| `handle_new_user()`                         | Auth trigger only, security-definer.                                                                                                                                                        |
+| `prepare_game_result()`                     | Trigger only, security-invoker. Derives the reporter and snapshots state while holding the per-game transaction lock.                                                                       |
+| `prevent_profile_role_change()`             | Trigger only. Rejects role changes unless the database role is `service_role`.                                                                                                              |
 
-The `public.handle_new_user()` security-definer function exists only for the
-`auth.users` trigger. It uses an empty `search_path` and is not executable by
-Data API roles.
+Every function has an empty `search_path`; public default execution is revoked.
+The revision trigger is stored in the non-exposed `private` schema. All
+functions are owned by `postgres`; only `handle_new_user` and
+`review_game_result` are security-definer.
 
-The `public.ensure_game_rating(bigint)` RPC is deliberately executable only by
-`authenticated`. It is security-invoker, uses an empty `search_path`, derives
-the inserted `user_id` from `auth.uid()`, and relies on the rating insert policy
-plus the `(user_id, game_id)` key for owner isolation and idempotency.
+## Persisted invariants
+
+- Game and tournament names contain a non-whitespace character.
+- Rating configuration has exactly the version-1 object shape, supported
+  `glicko`/`elo`/`custom` system, bounded finite settings, valid Glicko
+  deviation ordering, rating period, Elo parameters, and a non-blank formula
+  of at most 500 characters.
+- Configuration and revision change together: configuration changes increment
+  the positive revision by exactly one; revision-only writes fail.
+- Ratings and result snapshots are finite; rating types are supported; rating
+  metadata and result JSON snapshots are objects.
+- Result reporters are participants, winner and loser differ, and reviews move
+  a pending result exactly once to `confirmed` or `disputed`.
+- Confirmation requires unchanged configuration and player snapshots, then
+  updates both ratings and the terminal result in one transaction.
+- Invite email normalization, ownership, revocation, and cross-game foreign
+  keys are enforced independently of application validation.
+- Profile roles, profile ownership, game ownership, tournament identity, result
+  snapshots, and generated timestamps are not writable by end users.
+
+Foreign-key and RLS lookup columns have leading indexes. RLS policies wrap
+`auth.uid()` and `auth.jwt()` in scalar subqueries so PostgreSQL evaluates them
+once per statement.
 
 ## Verification
 
-The pgTAP suite in
-`supabase/tests/` contains 99 top-level assertions across four files. Generated assertions
-exercise many cases internally rather than inflating the TAP count. The suite
-verifies:
+The SQL suite contains 192 top-level pgTAP assertions across eight files.
+Generated loops and property tests cover more cases without inflating TAP
+counts:
 
-- RLS is enabled on every exposed application table.
-- Table, column, sequence, and function privileges match the matrix.
-- Anonymous reads succeed and anonymous writes fail.
-- Authenticated owner operations succeed.
-- Cross-user profile, rating, tournament, and participant operations fail.
-- An `authenticated` database role without a JWT user identity cannot create a
-  game.
-- An exhaustive generated matrix covers every pairing of eight actors and
-  eight resource owners across game creation, profile and rating updates,
-  tournament creation and updates, and participant insertion (384 policy
-  decisions).
-- Generated malformed names, identities, states, types, rating values, and JSON
-  shapes fail closed while valid numeric boundaries remain accepted.
-- Generated rating-configuration cases cover missing, null, array, extra-key,
-  wrong-type, fractional-version, out-of-range, and blank/oversized formula
-  inputs, plus all accepted numeric and formula-length boundaries.
-- Independent database sessions verify that non-owner updates and participant
-  inserts cannot win or block on concurrent owner transactions, and that two
-  authorized inserts of the same participant serialize to exactly one row.
-- Independent owner sessions racing the same rating-configuration revision
-  serialize to one committed winner; a non-owner is filtered without waiting,
-  and the stale owner compare-and-set affects zero rows.
+- An exhaustive 8 actor × 8 owner matrix checks six operations per pairing
+  (384 decisions): profile updates, denied direct rating updates, tournament
+  updates, game creation, tournament creation, and participant insertion.
+- Generated malformed/null names, JWT subjects, types, states, floating-point
+  values, metadata, configuration shapes, exact keys, bounds, formula sizes,
+  and foreign-key targets fail closed.
+- Invite tests cover admin/player creation, normalization, public/invited/
+  outsider visibility, revocation, forged ownership, direct join bypasses, and
+  concurrent invited/outsider joins.
+- Result tests cover forged identities, cross-game participants, immutable
+  snapshots, every pending/confirmed/disputed transition, replay idempotency,
+  stale rating/configuration rejection, invite revocation, and service-only
+  review execution.
+- Independent `dblink` sessions exercise non-owner lock filtering, duplicate
+  participant insertion, configuration compare-and-set races, and committed
+  outcomes.
+- Database-backed Vitest adds generated result-transition traces, authorization
+  matrices, username races, default-rating snapshot races, and invite races.
+- Application FastCheck suites cover formula fuzzing, malformed IDs, rating
+  configuration, Glicko/Elo/period boundaries, roles, profiles, and invites.
 
-Run the database checks against the local Supabase stack:
+Run the complete local database verification:
 
 ```sh
-supabase start
-supabase db reset
-supabase test db
+bunx supabase db reset --local
+bun run test:db
+bunx supabase db lint --local --level warning
+bunx supabase db advisors --local --type security
+bunx supabase db advisors --local --type performance
+bun run update-types
 ```
 
-The July 25 migrations intentionally use distinct versions in dependency order:
-profile usernames at `20260725000000`, the default-rating RPC at
-`20260725010000`, and this consolidated hardening at `20260725055352`.
+The final migration order is:
 
-The tests run inside a transaction and roll back all fixture users and data.
-The concurrency suite uses separately committed, uniquely keyed fixtures
-because independent sessions cannot observe the pgTAP transaction; it removes
-those fixtures before finishing.
+1. rating configuration (`20260724000000`)
+2. usernames (`20260725000000`)
+3. default-rating RPC (`20260725005000`)
+4. roles and privileged rating RPC (`20260725010000`)
+5. invite-only games (`20260725020000`)
+6. peer-checked results (`20260725055357`)
+7. public-profile constraints (`20260726000000`)
+8. consolidated final restrictions (`20260726010000`)
 
 ## Limitations
 
-- Tests model the database roles and JWT subject claim directly. Supabase's JWT
-  signature verification is an API/Auth concern and is not duplicated here.
-- Public reads are intentional and are not treated as tenant-private data.
-- The database constrains valid tournament status values, but product semantics
-  do not yet define a stricter lifecycle graph (for example, whether
-  `completed` may return to `active`), so tests cover the current
-  `pending` → `active` → `completed` path without inventing transition rules.
-- The race suite covers conflicting owner/non-owner writes, duplicate
-  authorized inserts, rating-configuration compare-and-set updates, lock
-  behavior, and committed outcomes. It does not attempt performance, soak, or
-  load testing.
-- PostgreSQL validates the persisted rating-configuration structure, bounds,
-  system name, and formula string size. Parsing and safely evaluating custom
-  formula syntax remains application-library behavior and is covered by the
-  rating unit and property tests.
+- pgTAP sets PostgreSQL roles and JWT claims directly. Signed-token rejection is
+  exercised by database-backed Supabase client tests, not reimplemented in SQL.
+- Public profile SELECT currently includes the application role. Roles are
+  authorization inputs, not secrets; role mutation remains service-only.
+- The merged display-name constraints are `NOT VALID`: new and changed rows are
+  checked, but pre-existing rows are not retroactively scanned.
+- Tournament statuses are constrained to declared values, but the product does
+  not yet define a stricter lifecycle graph, so the database does not invent
+  one.
+- Custom formula parsing/evaluation remains application behavior. PostgreSQL
+  enforces persisted structure, size, and numeric boundaries; unit/property/
+  fuzz tests enforce formula grammar and finite evaluation.
+- Race tests cover conflicting transactions and final committed state, not
+  performance, soak, or distributed load.

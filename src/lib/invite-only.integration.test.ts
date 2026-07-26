@@ -292,7 +292,10 @@ describe.skipIf(!hasSupabaseEnvironment)('invite-only games through the Data API
 		};
 		const { data: ownerUpdate, error: ownerUpdateError } = await owner
 			.from('games')
-			.update({ rating_configuration: ownerConfiguration })
+			.update({
+				rating_configuration: ownerConfiguration,
+				rating_configuration_revision: 2
+			})
 			.eq('game_id', ownerGameId)
 			.select('rating_configuration');
 		const { data: deniedConfigurationUpdate, error: deniedConfigurationError } = await invited
@@ -301,7 +304,8 @@ describe.skipIf(!hasSupabaseEnvironment)('invite-only games through the Data API
 				rating_configuration: {
 					...ownerConfiguration,
 					defaultRating: 1600
-				}
+				},
+				rating_configuration_revision: 3
 			})
 			.eq('game_id', ownerGameId)
 			.select('rating_configuration');

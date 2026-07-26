@@ -66,6 +66,12 @@ select
   )::uuid
 from generate_series(1, 8) as principal;
 
+set local role service_role;
+update public.profiles
+set role = 'admin'
+where user_id::text like '00000000-0000-4000-8000-%';
+reset role;
+
 create or replace function pg_temp.authorization_matrix_holds()
 returns boolean
 language plpgsql
@@ -102,16 +108,17 @@ begin
         return false;
       end if;
 
-      update public.ratings
-      set rating = 1200 + actor_number
-      where game_id = 920001
-        and user_id = owner_id;
-      get diagnostics affected = row_count;
-      if affected <> should_succeed::integer then
-        raise notice 'rating mismatch: actor %, owner %, rows %',
-          actor_number, owner_number, affected;
+      begin
+        update public.ratings
+        set rating = 1200 + actor_number
+        where game_id = 920001
+          and user_id = owner_id;
+        raise notice 'direct rating update accepted: actor %, owner %',
+          actor_number, owner_number;
         return false;
-      end if;
+      exception
+        when insufficient_privilege then null;
+      end;
 
       update public.tournaments
       set name = format('actor-%s-owner-%s', actor_number, owner_number)
@@ -334,6 +341,9 @@ select lives_ok(
   'generated malformed tournament states are rejected'
 );
 
+reset role;
+set local role service_role;
+
 select lives_ok(
   $test$
     do $do$
@@ -408,6 +418,10 @@ select lives_ok(
   'finite float boundaries and object metadata remain valid'
 );
 
+reset role;
+set local role authenticated;
+set local "request.jwt.claim.sub" = '00000000-0000-4000-8000-000000000001';
+
 select lives_ok(
   $test$
     do $do$
@@ -420,7 +434,7 @@ select lives_ok(
         );
         raise exception 'rating with missing game accepted';
       exception
-        when foreign_key_violation then null;
+        when foreign_key_violation or insufficient_privilege then null;
       end;
 
       begin

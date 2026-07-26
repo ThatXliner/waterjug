@@ -105,9 +105,9 @@ select ok(
   'immutable profile columns cannot be updated'
 );
 select ok(
-  has_table_privilege('authenticated', 'public.ratings', 'select,insert,update')
-    and not has_table_privilege('authenticated', 'public.ratings', 'delete'),
-  'authenticated users can read, add, and update ratings but not delete them'
+  has_table_privilege('authenticated', 'public.ratings', 'select,insert')
+    and not has_table_privilege('authenticated', 'public.ratings', 'update,delete'),
+  'authenticated users can read and join ratings but cannot bypass peer-reviewed updates'
 );
 select ok(
   has_table_privilege('authenticated', 'public.tournaments', 'select,insert,update')
@@ -229,6 +229,12 @@ values (
 insert into public.tournament_participants (tournament_id, user_id)
 values (900001, '11111111-1111-4111-8111-111111111111');
 
+set local role service_role;
+update public.profiles
+set role = 'admin'
+where user_id = '11111111-1111-4111-8111-111111111111';
+reset role;
+
 set local role anon;
 
 select results_eq(
@@ -313,13 +319,16 @@ select throws_ok(
   null,
   'a user cannot update protected profile columns'
 );
-select lives_ok(
+select throws_ok(
   $$update public.ratings set rating = 1250 where game_id = 900001 and user_id = '11111111-1111-4111-8111-111111111111'$$,
-  'a user can update their own rating'
+  '42501',
+  null,
+  'a user cannot bypass peer confirmation by updating their own rating'
 );
-select results_eq(
+select throws_ok(
   $$update public.ratings set rating = 9999 where game_id = 900001 and user_id = '22222222-2222-4222-8222-222222222222' returning 1$$,
-  $$values (1) limit 0$$,
+  '42501',
+  null,
   'a user cannot update another rating'
 );
 select throws_ok(

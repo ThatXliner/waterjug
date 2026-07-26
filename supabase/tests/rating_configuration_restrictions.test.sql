@@ -106,6 +106,12 @@ values (
   pg_temp.rating_configuration()
 );
 
+set local role service_role;
+update public.profiles
+set role = 'admin'
+where user_id = '55555555-5555-4555-8555-555555555555';
+reset role;
+
 set local role authenticated;
 set local "request.jwt.claim.sub" = '55555555-5555-4555-8555-555555555555';
 
