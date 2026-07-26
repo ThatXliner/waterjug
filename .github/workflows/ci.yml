@@ -31,6 +31,8 @@ jobs:
           bunx supabase db reset
           bunx supabase migration up --local
       - run: bun run test
+      - name: Test authorization privileges
+        run: bun run test:database:authorization
       - name: Test Glicko database constraints
         run: bun run test:database:glicko
   lint:

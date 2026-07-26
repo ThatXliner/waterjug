@@ -80,8 +80,14 @@ GRANT INSERT ON TABLE
     public.tournament_participants
 TO authenticated;
 
+-- The username migration grants table-level profile updates so it can stand
+-- alone. Once roles exist, narrow that grant so authenticated users cannot
+-- even target the authorization column. The ownership RLS policy and role
+-- trigger remain independent defense-in-depth checks.
+REVOKE UPDATE ON TABLE public.profiles FROM authenticated;
+GRANT UPDATE (display_name, username) ON TABLE public.profiles TO authenticated;
+
 GRANT UPDATE ON TABLE
-    public.profiles,
     public.ratings,
     public.tournaments
 TO authenticated;

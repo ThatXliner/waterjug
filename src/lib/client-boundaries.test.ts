@@ -37,4 +37,11 @@ describe('client/server Supabase boundaries', () => {
 			);
 		}
 	});
+
+	it('uses the verified locals snapshot as the root layout identity authority', () => {
+		const source = readFileSync(resolve(workspace, 'src/routes/+layout.server.ts'), 'utf8');
+
+		expect(source).toContain('locals: { session, user, supabase, role }');
+		expect(source).not.toContain('safeGetSession');
+	});
 });

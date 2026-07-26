@@ -69,6 +69,14 @@ databaseDescribe('Supabase authorization invariants', () => {
 				.eq('user_id', player.id);
 			expect(escalationError).not.toBeNull();
 
+			const { data: unchangedPlayerProfile, error: unchangedPlayerProfileError } = await service
+				.from('profiles')
+				.select('role')
+				.eq('user_id', player.id)
+				.single();
+			expect(unchangedPlayerProfileError).toBeNull();
+			expect(unchangedPlayerProfile?.role).toBe('player');
+
 			for (const actor of actors) {
 				for (const target of actors) {
 					const { data, error } = await actor.client
