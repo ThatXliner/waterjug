@@ -154,7 +154,8 @@ test('confirms a completed password reset on the login page', async ({ page }) =
 test('unauthenticated users cannot reach privileged game action parsing', async ({ request }) => {
 	for (const endpoint of [
 		'/game/new?/create',
-		'/game/play/1?/rate',
+		'/game/play/1?/reportResult',
+		'/game/play/1?/reviewResult',
 		'/game/play/1?/createTournament',
 		'/game/play/1?/configure'
 	]) {

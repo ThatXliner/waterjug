@@ -4,6 +4,7 @@
 
 	let { data, form } = $props();
 	let ratings = $derived(data.ratings);
+	let pendingReviewCounts = $derived(data.pendingReviewCounts);
 	let displayName = $derived(data.displayName);
 	let username = $derived(data.username);
 	let role = $derived(data.role);
@@ -126,6 +127,13 @@
 				<div class="card-body">
 					<h2 class="card-title">{rating.games?.name}</h2>
 					<p>Your rating: {rating.rating}</p>
+					{#if pendingReviewCounts[rating.game_id]}
+						<div class="badge badge-warning">
+							{pendingReviewCounts[rating.game_id]} result{pendingReviewCounts[rating.game_id] === 1
+								? ''
+								: 's'} waiting for your review
+						</div>
+					{/if}
 					<div class="card-actions">
 						<a href="/game/play/{rating.game_id}" class="btn btn-primary w-full">Go to game</a>
 					</div>

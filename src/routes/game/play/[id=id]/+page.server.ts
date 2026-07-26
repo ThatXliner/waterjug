@@ -17,8 +17,6 @@ import {
 	type RatingState
 } from '$lib/rating';
 
-const MAX_RESULT_UPDATE_ATTEMPTS = 3;
-
 async function requireGameAccess(supabase: SupabaseClient<Database>, gameId: number) {
 	const { data: game, error: accessError } = await supabase
 		.from('games')
@@ -112,8 +110,20 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		.eq('game_id', gameId)
 		.order('created_at', { ascending: false });
 
+	const { data: results, error: resultsError } = await supabase
+		.from('game_results')
+		.select(
+			'id, reporter_id, winner_id, loser_id, status, configuration_revision, winner_rating_snapshot, winner_type_snapshot, winner_other_data_snapshot, loser_rating_snapshot, loser_type_snapshot, loser_other_data_snapshot, reviewed_by, reviewed_at, created_at'
+		)
+		.eq('game_id', gameId)
+		.order('created_at', { ascending: false });
+	if (resultsError) {
+		error(500, 'Game results could not be loaded.');
+	}
+
 	return {
 		data,
+		results,
 		gameName: game.name,
 		inviteOnly: game.invite_only,
 		user,
@@ -125,103 +135,164 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	};
 };
 
-async function getRatingFor(
-	supabase: SupabaseClient<Database>,
-	gameId: number,
-	user: string,
+function ratingStateFromSnapshot(
+	rating: number,
+	otherData: unknown,
 	configuration: RatingConfiguration
-): Promise<{
-	state: RatingState;
-	type: string;
-	otherData: Database['public']['Tables']['ratings']['Row']['other_data'];
-}> {
-	const { data: rating, error } = await supabase
-		.from('ratings')
-		.select('rating, other_data, type')
-		.eq('game_id', gameId)
-		.eq('user_id', user)
-		.single();
-	if (error != null) {
-		throw error;
-	}
-	const metadata = rating.other_data as {
+): RatingState {
+	const metadata = otherData as {
 		deviation?: number;
 		rd?: number;
 		lastRatedAt?: string;
 	};
 	return {
-		state: {
-			rating: rating.rating,
-			deviation: metadata.deviation ?? metadata.rd ?? configuration.glicko.initialDeviation,
-			lastRatedAt: metadata.lastRatedAt
-		},
-		type: rating.type,
-		otherData: rating.other_data
+		rating,
+		deviation: metadata.deviation ?? metadata.rd ?? configuration.glicko.initialDeviation,
+		lastRatedAt: metadata.lastRatedAt
 	};
 }
 
 export const actions: Actions = {
-	rate: async ({ request, params, locals }) => {
+	reportResult: async ({ request, params, locals }) => {
 		const user = requireUser(locals).id;
 		const formData = await request.formData();
-		const winner = formData.get('winner')?.toString();
-		if (!isUuid(winner) || winner === user) {
-			return fail(400, { resultError: 'Select another player as the winner' });
+		const opponent = formData.get('opponent')?.toString();
+		const outcome = formData.get('outcome')?.toString();
+		const submissionId = formData.get('submissionId')?.toString();
+		if (!isUuid(opponent) || opponent === user) {
+			return fail(400, { resultError: 'Select another player as your opponent' });
+		}
+		if (!['won', 'lost'].includes(outcome ?? '')) {
+			return fail(400, { resultError: 'Select whether you won or lost' });
+		}
+		if (!isUuid(submissionId)) {
+			return fail(400, { resultError: 'Invalid result submission; reopen the form and retry' });
 		}
 		const gameId = parseInt(params.id);
 		await requireGameAccess(locals.supabase, gameId);
-		const privilegedSupabase = getPrivilegedSupabase();
+		const winner = outcome === 'won' ? user : opponent;
+		const loser = outcome === 'lost' ? user : opponent;
+		const { error: insertError } = await locals.supabase.from('game_results').insert({
+			game_id: gameId,
+			reporter_id: user,
+			submission_id: submissionId,
+			winner_id: winner,
+			loser_id: loser
+		});
+		if (insertError && insertError.code !== '23505') {
+			if (insertError.code === '42501' || insertError.code === '23503') {
+				return fail(403, {
+					resultError: 'You and your opponent must both be current players in this game'
+				});
+			}
+			return fail(500, { resultError: insertError.message });
+		}
 
-		for (let attempt = 0; attempt < MAX_RESULT_UPDATE_ATTEMPTS; attempt += 1) {
-			const { data: game, error: gameError } = await privilegedSupabase
-				.from('games')
-				.select('rating_configuration, rating_configuration_revision')
-				.eq('game_id', gameId)
-				.single();
-			if (gameError) throw gameError;
+		return { resultSuccess: true };
+	},
 
-			const configuration = parseRatingConfiguration(game.rating_configuration);
-			const oldYou = await getRatingFor(privilegedSupabase, gameId, user, configuration);
-			const oldThem = await getRatingFor(privilegedSupabase, gameId, winner, configuration);
+	reviewResult: async ({ request, params, locals }) => {
+		const reviewerId = requireUser(locals).id;
+		const formData = await request.formData();
+		const resultId = Number(formData.get('resultId'));
+		const decision = formData.get('decision')?.toString();
+		if (!Number.isSafeInteger(resultId) || resultId <= 0) {
+			return fail(400, { reviewError: 'Invalid result' });
+		}
+		if (decision !== 'confirmed' && decision !== 'disputed') {
+			return fail(400, { reviewError: 'Choose confirm or dispute' });
+		}
+
+		const gameId = parseInt(params.id);
+		await requireGameAccess(locals.supabase, gameId);
+		const { data: result, error: resultError } = await locals.supabase
+			.from('game_results')
+			.select('*')
+			.eq('id', resultId)
+			.eq('game_id', gameId)
+			.maybeSingle();
+		if (resultError) return fail(500, { reviewError: resultError.message });
+		if (!result) return fail(404, { reviewError: 'Result not found' });
+		if (
+			reviewerId === result.reporter_id ||
+			(reviewerId !== result.winner_id && reviewerId !== result.loser_id)
+		) {
+			return fail(403, { reviewError: 'Only the opponent can review this result' });
+		}
+
+		let winnerNewRating: number | null = null;
+		let winnerNewType: string | null = null;
+		let winnerNewOtherData: { deviation?: number; lastRatedAt?: string } | null = null;
+		let loserNewRating: number | null = null;
+		let loserNewType: string | null = null;
+		let loserNewOtherData: { deviation?: number; lastRatedAt?: string } | null = null;
+
+		if (decision === 'confirmed') {
+			const configuration = parseRatingConfiguration(result.rating_configuration_snapshot);
 			const match = createRatingCalculator(configuration).calculateMatch(
-				oldYou.state,
-				oldThem.state,
-				0,
+				ratingStateFromSnapshot(
+					result.winner_rating_snapshot,
+					result.winner_other_data_snapshot,
+					configuration
+				),
+				ratingStateFromSnapshot(
+					result.loser_rating_snapshot,
+					result.loser_other_data_snapshot,
+					configuration
+				),
+				1,
 				new Date()
 			);
-			const loserOtherData = {
+			winnerNewRating = match.player.rating;
+			winnerNewType = configuration.system;
+			winnerNewOtherData = {
 				deviation: match.player.deviation,
 				lastRatedAt: match.player.lastRatedAt
 			};
-			const winnerOtherData = {
+			loserNewRating = match.opponent.rating;
+			loserNewType = configuration.system;
+			loserNewOtherData = {
 				deviation: match.opponent.deviation,
 				lastRatedAt: match.opponent.lastRatedAt
 			};
-			const { data: applied, error: updateError } = await privilegedSupabase.rpc(
-				'apply_rating_result',
-				{
-					p_game_id: gameId,
-					p_expected_configuration_revision: game.rating_configuration_revision,
-					p_loser_id: user,
-					p_winner_id: winner,
-					p_expected_loser_rating: oldYou.state.rating,
-					p_expected_loser_type: oldYou.type,
-					p_expected_loser_other_data: oldYou.otherData,
-					p_expected_winner_rating: oldThem.state.rating,
-					p_expected_winner_type: oldThem.type,
-					p_expected_winner_other_data: oldThem.otherData,
-					p_new_loser_rating: match.player.rating,
-					p_new_loser_other_data: loserOtherData,
-					p_new_winner_rating: match.opponent.rating,
-					p_new_winner_other_data: winnerOtherData,
-					p_new_type: configuration.system
-				}
-			);
-			if (updateError) throw updateError;
-			if (applied) return { resultSuccess: true };
 		}
 
-		error(409, 'Ratings or configuration changed concurrently; retry the result');
+		const ratingUpdates =
+			decision === 'confirmed'
+				? {
+						p_winner_new_rating: winnerNewRating!,
+						p_winner_new_type: winnerNewType!,
+						p_winner_new_other_data: winnerNewOtherData!,
+						p_loser_new_rating: loserNewRating!,
+						p_loser_new_type: loserNewType!,
+						p_loser_new_other_data: loserNewOtherData!
+					}
+				: {};
+		const privilegedSupabase = getPrivilegedSupabase();
+		const { error: reviewError } = await privilegedSupabase.rpc('review_game_result', {
+			p_result_id: result.id,
+			p_reviewer_id: reviewerId,
+			p_decision: decision,
+			p_expected_configuration_revision: result.configuration_revision,
+			...ratingUpdates
+		});
+		if (reviewError) {
+			if (reviewError.code === 'PT409') {
+				return fail(409, {
+					reviewError:
+						'Ratings or settings changed since this result was reported. Dispute it and report a fresh result.'
+				});
+			}
+			if (reviewError.code === '42501') {
+				return fail(403, { reviewError: 'You no longer have permission to review this result' });
+			}
+			if (reviewError.code === '22023') {
+				return fail(409, { reviewError: reviewError.message });
+			}
+			return fail(500, { reviewError: reviewError.message });
+		}
+
+		return { reviewSuccess: true };
 	},
 
 	createTournament: async ({ request, params, locals }) => {
