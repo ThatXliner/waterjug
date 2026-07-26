@@ -76,6 +76,11 @@ describe.skipIf(!hasSupabaseEnvironment)('invite-only games through the Data API
 			createUser(emails.invited),
 			createUser(emails.outsider)
 		]);
+		const { error: roleError } = await service
+			.from('profiles')
+			.update({ role: 'admin' })
+			.in('user_id', [ownerId, outsiderId]);
+		expect(roleError).toBeNull();
 		[owner, invited, outsider] = await Promise.all([
 			signedInClient(emails.owner),
 			signedInClient(emails.invited),
@@ -136,6 +141,13 @@ describe.skipIf(!hasSupabaseEnvironment)('invite-only games through the Data API
 				name: `${gamePrefix}-malformed`,
 				emails: [emails.invited, 'not-an-email'],
 				code: '22023'
+			},
+			{
+				label: 'player without game-creation role',
+				client: invited,
+				name: `${gamePrefix}-player-role`,
+				emails: [emails.invited],
+				code: '42501'
 			}
 		];
 
@@ -186,6 +198,10 @@ describe.skipIf(!hasSupabaseEnvironment)('invite-only games through the Data API
 			.select('invited_email')
 			.eq('game_id', gameId)
 			.order('invited_email');
+		const { data: anonymousInvites, error: anonymousInviteError } = await anonymous
+			.from('game_invites')
+			.select('invited_email')
+			.eq('game_id', gameId);
 
 		expect(game).toEqual({
 			name,
@@ -197,6 +213,8 @@ describe.skipIf(!hasSupabaseEnvironment)('invite-only games through the Data API
 			{ invited_email: emails.invited },
 			{ invited_email: emails.outsider }
 		]);
+		expect(anonymousInviteError).toBeNull();
+		expect(anonymousInvites).toEqual([]);
 	});
 
 	it('revokes and restores access as invitations transition state', async () => {

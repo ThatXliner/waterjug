@@ -84,6 +84,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			p_game_id: gameId
 		});
 		if (joinError) {
+			if (joinError.code === '42501') {
+				error(403, 'This game is invite-only. Ask the game creator to invite your account email.');
+			}
 			error(500, joinError);
 		}
 		data = await fetchRatings(supabase, gameId).catch((err) => {
@@ -262,6 +265,8 @@ export const actions: Actions = {
 	configure: async ({ request, params, locals }) => {
 		const user = requireUser(locals);
 		const { supabase } = locals;
+		const gameId = parseInt(params.id);
+		await requireGameAccess(supabase, gameId);
 		const formData = await request.formData();
 		let configuration;
 		let expectedRevision;
@@ -279,7 +284,7 @@ export const actions: Actions = {
 		const { data: existing, error: fetchError } = await supabase
 			.from('games')
 			.select('created_by')
-			.eq('game_id', parseInt(params.id))
+			.eq('game_id', gameId)
 			.single();
 		if (fetchError) return fail(500, { configurationError: fetchError.message });
 		if (existing.created_by !== user.id)
@@ -294,7 +299,7 @@ export const actions: Actions = {
 								rating_configuration: nextConfiguration,
 								rating_configuration_revision: nextRevision
 							})
-							.eq('game_id', parseInt(params.id))
+							.eq('game_id', gameId)
 							.eq('rating_configuration_revision', currentRevision)
 							.select('rating_configuration_revision')
 							.maybeSingle();

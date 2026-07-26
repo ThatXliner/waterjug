@@ -23,42 +23,20 @@ create table public.game_invites (
 
 alter table public.game_invites enable row level security;
 
-grant select on table public.games to anon;
-grant select, insert, update on table public.games to authenticated;
-grant all on table public.games to service_role;
-grant usage, select on sequence public.games_game_id_seq to authenticated;
-grant all on sequence public.games_game_id_seq to service_role;
 grant select on table public.game_invites to anon;
 grant select, insert, delete on table public.game_invites to authenticated;
 grant all on table public.game_invites to service_role;
-grant select on table public.ratings to anon;
-grant select, insert, update on table public.ratings to authenticated;
-grant all on table public.ratings to service_role;
-grant select on table public.tournaments to anon;
-grant select, insert, update on table public.tournaments to authenticated;
-grant all on table public.tournaments to service_role;
-grant usage, select on sequence public.tournaments_tournament_id_seq to authenticated;
-grant all on sequence public.tournaments_tournament_id_seq to service_role;
-grant select on table public.tournament_participants to anon;
-grant select, insert on table public.tournament_participants to authenticated;
-grant all on table public.tournament_participants to service_role;
 
-drop policy "Enable insert for authenticated users only" on public.games;
 drop policy "Enable read access for all users" on public.games;
 drop policy "Game owners may update rating configuration" on public.games;
 drop policy "Enable read access for all users" on public.ratings;
 drop policy "You may only add your own rating" on public.ratings;
 drop policy "You may only update your own rating" on public.ratings;
 drop policy "Enable read access for all users" on public.tournaments;
-drop policy "Enable insert for authenticated users" on public.tournaments;
+drop policy "Users may create their own tournaments" on public.tournaments;
 drop policy "Enable update for creator" on public.tournaments;
 drop policy "Enable read access for all users" on public.tournament_participants;
-drop policy "Enable insert for authenticated users" on public.tournament_participants;
-
-create policy "Authenticated users can create owned games"
-	on public.games for insert
-	to authenticated
-	with check ((select auth.uid()) = created_by);
+drop policy "Tournament creators may add participants" on public.tournament_participants;
 
 create policy "Game owners may update rating configuration"
 	on public.games for update
@@ -68,6 +46,7 @@ create policy "Game owners may update rating configuration"
 
 create policy "Users can view accessible games"
 	on public.games for select
+	to anon, authenticated
 	using (
 		not invite_only
 		or (select auth.uid()) = created_by
@@ -101,6 +80,7 @@ create policy "Creators can remove game invites"
 
 create policy "Users can view ratings for accessible games"
 	on public.ratings for select
+	to anon, authenticated
 	using (
 		exists (
 			select 1
@@ -143,6 +123,7 @@ create policy "Users can update their rating in accessible games"
 
 create policy "Users can view tournaments for accessible games"
 	on public.tournaments for select
+	to anon, authenticated
 	using (
 		exists (
 			select 1
@@ -185,6 +166,7 @@ create policy "Creators can update accessible tournaments"
 
 create policy "Users can view participants for accessible tournaments"
 	on public.tournament_participants for select
+	to anon, authenticated
 	using (
 		exists (
 			select 1
@@ -201,6 +183,7 @@ create policy "Users can add participants to accessible tournaments"
 			select 1
 			from public.tournaments
 			where tournaments.tournament_id = tournament_participants.tournament_id
+				and tournaments.created_by = (select auth.uid())
 		)
 	);
 

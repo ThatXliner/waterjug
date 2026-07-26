@@ -1,6 +1,6 @@
 begin;
 
-select plan(14);
+select plan(17);
 
 insert into auth.users (
 	id,
@@ -56,6 +56,25 @@ values
 		now()
 	);
 
+set local role service_role;
+update public.profiles
+set role = 'admin'
+where user_id = '00000000-0000-0000-0000-000000000001';
+reset role;
+
+select ok(
+	has_function_privilege(
+		'authenticated',
+		'public.create_game(text,boolean,text[],jsonb)',
+		'EXECUTE'
+	),
+	'authenticated callers may invoke the RLS-enforced create RPC'
+);
+select ok(
+	not has_function_privilege('anon', 'public.create_game(text,boolean,text[],jsonb)', 'EXECUTE'),
+	'anonymous callers cannot invoke the create RPC'
+);
+
 set local role authenticated;
 set local request.jwt.claims =
 	'{"sub":"00000000-0000-0000-0000-000000000001","email":"owner@example.com","role":"authenticated"}';
@@ -88,6 +107,12 @@ set local role authenticated;
 set local request.jwt.claims =
 	'{"sub":"00000000-0000-0000-0000-000000000003","email":"outsider@example.com","role":"authenticated"}';
 
+select throws_ok(
+	$$select public.create_game('Player-created game', false, array[]::text[])$$,
+	'42501',
+	null,
+	'a player without the admin application role cannot create a game'
+);
 select is(
 	(select count(*)::integer from public.games where name = 'Private test game'),
 	0,
