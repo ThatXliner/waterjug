@@ -58,17 +58,10 @@ export const load: PageServerLoad = async ({ params, locals: { supabase } }) => 
 		error(401, 'No user');
 	}
 	if (data.filter((x: { user_id: string }) => x.user_id == user).length == 0) {
-		await supabase.from('ratings').insert({
-			game_id: gameId,
-			user_id: user,
-			rating: configuration.defaultRating,
-			type: configuration.system,
-			other_data: {
-				deviation:
-					configuration.system === 'glicko' ? configuration.glicko.initialDeviation : undefined,
-				lastRatedAt: new Date().toISOString()
-			}
+		const { error: insertError } = await supabase.rpc('ensure_game_rating', {
+			p_game_id: gameId
 		});
+		if (insertError) error(500, insertError);
 		data = await fetchRatings(supabase, gameId).catch((err) => {
 			error(500, err);
 		});

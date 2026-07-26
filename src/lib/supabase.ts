@@ -186,7 +186,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      ensure_game_rating: { Args: { p_game_id: number }; Returns: undefined }
     }
     Enums: {
       [_ in never]: never

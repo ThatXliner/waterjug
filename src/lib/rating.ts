@@ -221,8 +221,18 @@ export function parseRatingPeriodDaysFormValue(value: unknown) {
 	return periodDays;
 }
 
+const FORM_NUMBER_PATTERN = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
+
+export function parseRatingConfigurationNumber(value: FormDataEntryValue | null) {
+	if (typeof value !== 'string') return Number.NaN;
+	const normalized = value.trim();
+	if (!FORM_NUMBER_PATTERN.test(normalized)) return Number.NaN;
+	const parsed = Number(normalized);
+	return Number.isFinite(parsed) ? parsed : Number.NaN;
+}
+
 export function parseRatingConfigurationForm(formData: FormData) {
-	const number = (field: string) => Number(formData.get(field));
+	const number = (field: string) => parseRatingConfigurationNumber(formData.get(field));
 	return parseRatingConfiguration({
 		version: 1,
 		system: formData.get('system')?.toString(),

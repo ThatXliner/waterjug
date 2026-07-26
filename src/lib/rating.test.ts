@@ -4,6 +4,8 @@ import {
 	compileRatingFormula,
 	DEFAULT_RATING_CONFIGURATION,
 	parseRatingConfiguration,
+	parseRatingConfigurationForm,
+	parseRatingConfigurationNumber,
 	parseRatingPeriodDaysFormValue,
 	RatingConfigurationError
 } from './rating';
@@ -54,6 +56,40 @@ describe('rating configuration', () => {
 		expect(() => compileRatingFormula('globalThis.process.exit()')).toThrow('unsupported');
 		expect(() => compileRatingFormula('constructor(1)')).toThrow('not supported');
 		expect(() => compileRatingFormula('rating / 0')).toThrow('finite');
+	});
+
+	test.each([
+		'',
+		' ',
+		'0x10',
+		'1_200',
+		'１２00',
+		'1200\u0000',
+		'Infinity',
+		'-Infinity',
+		'NaN',
+		String(Number.MAX_VALUE),
+		'9'.repeat(10_000)
+	])('rejects malformed or out-of-range default-rating form value %j', (defaultRating) => {
+		const parsed = parseRatingConfigurationNumber(defaultRating);
+		expect(() => parseRatingConfiguration({ defaultRating: parsed })).toThrow(
+			RatingConfigurationError
+		);
+	});
+
+	test('does not coerce a missing default rating to zero', () => {
+		const formData = new FormData();
+		formData.set('system', 'glicko');
+		formData.set('periodDays', '1');
+		formData.set('glickoInitialDeviation', '350');
+		formData.set('glickoMaxDeviation', '350');
+		formData.set('glickoPeriodDeviationIncrease', '63.2');
+		formData.set('glickoScale', '400');
+		formData.set('eloKFactor', '32');
+		formData.set('eloScale', '400');
+		formData.set('customFormula', DEFAULT_RATING_CONFIGURATION.custom.formula);
+
+		expect(() => parseRatingConfigurationForm(formData)).toThrow(RatingConfigurationError);
 	});
 });
 
