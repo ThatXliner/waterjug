@@ -7,15 +7,20 @@ import { getPrivilegedSupabase } from '$lib/server/supabase';
 import { isUuid } from '$lib/uuid';
 import {
 	commitRatingConfiguration,
-	createRatingCalculator,
+	calculateRatingMatchWithFormulaEvaluator,
 	parseRatingConfiguration,
 	parseRatingConfigurationForm,
 	parseRatingConfigurationRevision,
 	RatingConfigurationConflictError,
 	RatingConfigurationError,
+	RatingFormulaError,
 	type RatingConfiguration,
 	type RatingState
 } from '$lib/rating';
+import {
+	evaluateRatingFormulaIsolated,
+	preflightRatingFormulaIsolated
+} from '$lib/server/rating-formula-worker';
 
 async function requireGameAccess(supabase: SupabaseClient<Database>, gameId: number) {
 	const { data: game, error: accessError } = await supabase
@@ -229,7 +234,8 @@ export const actions: Actions = {
 
 		if (decision === 'confirmed') {
 			const configuration = parseRatingConfiguration(result.rating_configuration_snapshot);
-			const match = createRatingCalculator(configuration).calculateMatch(
+			const match = await calculateRatingMatchWithFormulaEvaluator(
+				configuration,
 				ratingStateFromSnapshot(
 					result.winner_rating_snapshot,
 					result.winner_other_data_snapshot,
@@ -241,6 +247,7 @@ export const actions: Actions = {
 					configuration
 				),
 				1,
+				evaluateRatingFormulaIsolated,
 				new Date()
 			);
 			winnerNewRating = match.player.rating;
@@ -344,12 +351,17 @@ export const actions: Actions = {
 		try {
 			configuration = parseRatingConfigurationForm(formData);
 			expectedRevision = parseRatingConfigurationRevision(formData.get('configurationRevision'));
+			if (configuration.system === 'custom') {
+				await preflightRatingFormulaIsolated(configuration.custom.formula);
+			}
 		} catch (configurationError) {
 			return fail(400, {
 				configurationError:
 					configurationError instanceof RatingConfigurationError
 						? configurationError.message
-						: 'Invalid rating configuration.'
+						: configurationError instanceof RatingFormulaError
+							? `custom.formula is invalid: ${configurationError.message}`
+							: 'Invalid rating configuration.'
 			});
 		}
 		const { data: existing, error: fetchError } = await supabase

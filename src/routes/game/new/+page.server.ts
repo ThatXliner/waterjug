@@ -1,8 +1,13 @@
 import { redirect, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { parseInviteEmails } from '$lib/invites';
-import { parseRatingConfigurationForm, RatingConfigurationError } from '$lib/rating';
+import {
+	parseRatingConfigurationForm,
+	RatingConfigurationError,
+	RatingFormulaError
+} from '$lib/rating';
 import { requireRole } from '$lib/server/auth';
+import { preflightRatingFormulaIsolated } from '$lib/server/rating-formula-worker';
 
 export const load: PageServerLoad = ({ locals }) => {
 	requireRole(locals, 'admin');
@@ -33,12 +38,17 @@ export const actions: Actions = {
 		let ratingConfiguration;
 		try {
 			ratingConfiguration = parseRatingConfigurationForm(formData);
+			if (ratingConfiguration.system === 'custom') {
+				await preflightRatingFormulaIsolated(ratingConfiguration.custom.formula);
+			}
 		} catch (configurationError) {
 			return fail(400, {
 				configurationError:
 					configurationError instanceof RatingConfigurationError
 						? configurationError.message
-						: 'Invalid rating configuration.',
+						: configurationError instanceof RatingFormulaError
+							? `custom.formula is invalid: ${configurationError.message}`
+							: 'Invalid rating configuration.',
 				name,
 				inviteOnly
 			});

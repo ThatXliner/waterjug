@@ -130,8 +130,10 @@ The final migration order is:
 - Tournament statuses are constrained to declared values, but the product does
   not yet define a stricter lifecycle graph, so the database does not invent
   one.
-- Custom formula parsing/evaluation remains application behavior. PostgreSQL
-  enforces persisted structure, size, and numeric boundaries; unit/property/
-  fuzz tests enforce formula grammar and finite evaluation.
+- Custom formula parsing remains application behavior. Formula evaluation runs
+  in a dedicated Node worker with an empty environment, a one-second deadline,
+  and V8 heap/stack/code limits. PostgreSQL enforces persisted structure, size,
+  and numeric boundaries; unit/property/fuzz tests enforce formula grammar,
+  finite evaluation, worker equivalence, and deadline termination.
 - Race tests cover conflicting transactions and final committed state, not
   performance, soak, or distributed load.

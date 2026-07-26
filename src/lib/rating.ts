@@ -192,7 +192,7 @@ export function parseRatingConfiguration(value: unknown): RatingConfiguration {
 		issues.push('glicko.initialDeviation cannot exceed glicko.maxDeviation');
 	}
 	try {
-		compileRatingFormula(configuration.custom.formula);
+		validateRatingFormula(configuration.custom.formula);
 	} catch (error) {
 		issues.push(
 			`custom.formula is invalid: ${error instanceof Error ? error.message : 'unknown error'}`
@@ -388,14 +388,19 @@ function tokenize(expression: string): Token[] {
 	return tokens;
 }
 
-type FormulaNode =
+export type RatingFormulaProgram =
 	| { type: 'number'; value: number }
 	| { type: 'variable'; name: keyof RatingFormulaContext }
-	| { type: 'unary'; operator: '+' | '-'; value: FormulaNode }
-	| { type: 'binary'; operator: string; left: FormulaNode; right: FormulaNode }
-	| { type: 'call'; name: string; values: FormulaNode[] };
+	| { type: 'unary'; operator: '+' | '-'; value: RatingFormulaProgram }
+	| {
+			type: 'binary';
+			operator: string;
+			left: RatingFormulaProgram;
+			right: RatingFormulaProgram;
+	  }
+	| { type: 'call'; name: string; values: RatingFormulaProgram[] };
 
-function parseFormula(expression: string): FormulaNode {
+export function parseRatingFormulaProgram(expression: string): RatingFormulaProgram {
 	const tokens = tokenize(expression);
 	let position = 0;
 	let depth = 0;
@@ -425,7 +430,7 @@ function parseFormula(expression: string): FormulaNode {
 			depth -= 1;
 		}
 	};
-	const primary = (): FormulaNode => {
+	const primary = (): RatingFormulaProgram => {
 		const token = current();
 		if (token.type === 'number') {
 			consume();
@@ -454,7 +459,7 @@ function parseFormula(expression: string): FormulaNode {
 					);
 				}
 				consume('(');
-				const values: FormulaNode[] = [];
+				const values: RatingFormulaProgram[] = [];
 				if (current().value !== ')') {
 					do {
 						values.push(nested(token.position, add));
@@ -492,7 +497,7 @@ function parseFormula(expression: string): FormulaNode {
 			token.position
 		);
 	};
-	const unary = (): FormulaNode => {
+	const unary = (): RatingFormulaProgram => {
 		if (current().value === '+' || current().value === '-') {
 			const token = consume();
 			return {
@@ -503,7 +508,7 @@ function parseFormula(expression: string): FormulaNode {
 		}
 		return primary();
 	};
-	const power = (): FormulaNode => {
+	const power = (): RatingFormulaProgram => {
 		const left = unary();
 		if (current().value !== '^') return left;
 		const token = consume();
@@ -514,14 +519,14 @@ function parseFormula(expression: string): FormulaNode {
 			right: nested(token.position, power)
 		};
 	};
-	const multiply = (): FormulaNode => {
+	const multiply = (): RatingFormulaProgram => {
 		let node = power();
 		while (['*', '/', '%'].includes(current().value)) {
 			node = { type: 'binary', operator: consume().value, left: node, right: power() };
 		}
 		return node;
 	};
-	const add = (): FormulaNode => {
+	const add = (): RatingFormulaProgram => {
 		let node = multiply();
 		while (['+', '-'].includes(current().value)) {
 			node = { type: 'binary', operator: consume().value, left: node, right: multiply() };
@@ -535,7 +540,7 @@ function parseFormula(expression: string): FormulaNode {
 	return node;
 }
 
-function evaluateFormula(node: FormulaNode, context: RatingFormulaContext): number {
+function evaluateFormula(node: RatingFormulaProgram, context: RatingFormulaContext): number {
 	switch (node.type) {
 		case 'number':
 			return node.value;
@@ -572,11 +577,11 @@ function evaluateFormula(node: FormulaNode, context: RatingFormulaContext): numb
 }
 
 export function validateRatingFormula(expression: string) {
-	parseFormula(expression);
+	parseRatingFormulaProgram(expression);
 }
 
 export function compileRatingFormula(expression: string) {
-	const formula = parseFormula(expression);
+	const formula = parseRatingFormulaProgram(expression);
 	const evaluate = (context: RatingFormulaContext) => {
 		for (const name of FORMULA_NAMES) {
 			const value = context?.[name as keyof RatingFormulaContext];
@@ -770,4 +775,79 @@ export function calculateRating(
 	now = new Date()
 ): RatingState {
 	return createRatingCalculator(configuration).calculate(player, opponent, score, now);
+}
+
+export type RatingFormulaBatchEvaluator = (
+	expression: string,
+	contexts: readonly RatingFormulaContext[]
+) => Promise<readonly number[]>;
+
+/**
+ * Calculate both sides of a match while delegating custom-formula execution to
+ * a caller-provided boundary. Server code supplies a worker-backed evaluator;
+ * built-in Elo and Glicko calculations remain synchronous and in-process.
+ */
+export async function calculateRatingMatchWithFormulaEvaluator(
+	configuration: RatingConfiguration,
+	playerValue: RatingState,
+	opponentValue: RatingState,
+	playerScoreValue: 0 | 0.5 | 1,
+	evaluateCustomFormula: RatingFormulaBatchEvaluator,
+	now = new Date()
+) {
+	const config = parseRatingConfiguration(configuration);
+	if (config.system !== 'custom') {
+		return createRatingCalculator(config).calculateMatch(
+			playerValue,
+			opponentValue,
+			playerScoreValue,
+			now
+		);
+	}
+
+	const player = validateRatingState(playerValue, 'player');
+	const opponent = validateRatingState(opponentValue, 'opponent');
+	validateScore(playerScoreValue);
+	validateCalculationTime(now);
+	const opponentScore = (1 - playerScoreValue) as 0 | 0.5 | 1;
+	const playerExpected = expectedScore(
+		player.rating,
+		opponent.rating,
+		DEFAULT_RATING_CONFIGURATION.elo.scale
+	);
+	const opponentExpected = expectedScore(
+		opponent.rating,
+		player.rating,
+		DEFAULT_RATING_CONFIGURATION.elo.scale
+	);
+
+	let ratings: readonly number[];
+	try {
+		ratings = await evaluateCustomFormula(config.custom.formula, [
+			{
+				rating: player.rating,
+				opponentRating: opponent.rating,
+				score: playerScoreValue,
+				expected: playerExpected
+			},
+			{
+				rating: opponent.rating,
+				opponentRating: player.rating,
+				score: opponentScore,
+				expected: opponentExpected
+			}
+		]);
+	} catch (error) {
+		throw new RatingCalculationError(
+			`custom formula failed: ${error instanceof Error ? error.message : 'unknown error'}`
+		);
+	}
+	if (ratings.length !== 2) {
+		throw new RatingCalculationError('custom formula failed: evaluator returned an invalid result');
+	}
+
+	return {
+		player: validateCalculatedState({ rating: ratings[0], lastRatedAt: now.toISOString() }),
+		opponent: validateCalculatedState({ rating: ratings[1], lastRatedAt: now.toISOString() })
+	};
 }
