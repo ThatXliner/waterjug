@@ -4,6 +4,7 @@ import {
 	compileRatingFormula,
 	DEFAULT_RATING_CONFIGURATION,
 	parseRatingConfiguration,
+	parseRatingPeriodDaysFormValue,
 	RatingConfigurationError
 } from './rating';
 
@@ -25,6 +26,27 @@ describe('rating configuration', () => {
 			parseRatingConfiguration({ glicko: { initialDeviation: 400, maxDeviation: 300 } });
 		} catch (error) {
 			expect((error as Error).message).toContain('glicko.initialDeviation');
+		}
+	});
+
+	test('parses only bounded plain-decimal period form values', () => {
+		expect(parseRatingPeriodDaysFormValue('0.0416667')).toBe(0.0416667);
+		expect(parseRatingPeriodDaysFormValue('3650')).toBe(3650);
+		for (const malformed of [
+			null,
+			'',
+			' ',
+			'0',
+			'-1',
+			'3650.1',
+			'1e3',
+			'+1',
+			'0x10',
+			'1 day',
+			'2026-07-25T00:00:00.000Z',
+			'2024-03-10T02:30:00-08:00'
+		]) {
+			expect(() => parseRatingPeriodDaysFormValue(malformed)).toThrow(RatingConfigurationError);
 		}
 	});
 
@@ -72,6 +94,33 @@ describe('configured calculations', () => {
 			now
 		);
 		expect(atBoundary.rating).toBeGreaterThan(before.rating);
+	});
+
+	test('uses elapsed time across DST rather than local calendar-day changes', () => {
+		const config = parseRatingConfiguration({
+			system: 'glicko',
+			periodDays: 1,
+			glicko: {
+				initialDeviation: 100,
+				maxDeviation: 350,
+				periodDeviationIncrease: 50,
+				scale: 400
+			}
+		});
+		const opponent = { rating: 1200, deviation: 100 };
+		const state = (lastRatedAt?: string) => ({ rating: 1200, deviation: 100, lastRatedAt });
+		const calculate = (lastRatedAt: string | undefined, now: string) =>
+			calculateRating(config, state(lastRatedAt), opponent, 1, new Date(now));
+
+		const noInactivePeriod = calculate(undefined, '2024-03-11T01:30:00-07:00');
+		const springForward = calculate('2024-03-10T01:30:00-08:00', '2024-03-11T01:30:00-07:00');
+		expect(springForward.rating).toBeCloseTo(noInactivePeriod.rating, 12);
+		expect(springForward.deviation).toBeCloseTo(noInactivePeriod.deviation!, 12);
+
+		const exactPeriod = calculate('2024-11-03T02:30:00-08:00', '2024-11-04T02:30:00-08:00');
+		const fallBack = calculate('2024-11-03T01:30:00-07:00', '2024-11-04T01:30:00-08:00');
+		expect(fallBack.rating).toBeCloseTo(exactPeriod.rating, 12);
+		expect(fallBack.deviation).toBeCloseTo(exactPeriod.deviation!, 12);
 	});
 
 	test('evaluates a custom formula for both wins and losses', () => {

@@ -5,7 +5,6 @@ test('index page has expected h1', async ({ page }) => {
 	await page.goto('/');
 	await expect(page.getByRole('heading', { name: /WaterJug/ })).toBeVisible();
 });
-
 test('login links to password recovery', async ({ page }) => {
 	await page.goto('/login');
 	await page.getByRole('link', { name: 'Forgot password?' }).click();
@@ -151,4 +150,24 @@ test('confirms a completed password reset on the login page', async ({ page }) =
 	await expect(page.getByRole('status')).toContainText(
 		'Your password has been updated. You can now log in.'
 	);
+});
+test('unauthenticated users cannot reach privileged game action parsing', async ({ request }) => {
+	for (const endpoint of [
+		'/game/new?/create',
+		'/game/play/1?/rate',
+		'/game/play/1?/createTournament',
+		'/game/play/1?/configure'
+	]) {
+		const response = await request.post(endpoint, {
+			form: {
+				gameName: 'unauthorized configuration',
+				periodDays: 'not-a-period',
+				configurationRevision: 'not-a-revision'
+			},
+			headers: { origin: 'http://localhost:4173' },
+			maxRedirects: 0
+		});
+
+		expect(response.status(), endpoint).toBe(401);
+	}
 });
