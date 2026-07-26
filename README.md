@@ -160,7 +160,9 @@ existing player ratings. New players receive the configured starting rating.
 
 - Glicko supports rating-period length, initial and maximum deviation, deviation increase per
   inactive period, and rating scale.
-- Elo supports K-factor and rating scale.
+- Elo supports K-factor (default `32`, range `0.01`–`1000`) and rating scale (default
+  `400`, range `1`–`10000`). K-factor controls how quickly ratings move; scale controls how
+  strongly a rating gap changes the expected score.
 - Custom formulas return a player's new rating. They may use `rating`, `opponentRating`, `score`,
   and `expected`, along with arithmetic and `abs`, `min`, `max`, `pow`, `round`, `floor`, and
   `ceil`. Formulas are parsed by a restricted expression evaluator; JavaScript access, property
