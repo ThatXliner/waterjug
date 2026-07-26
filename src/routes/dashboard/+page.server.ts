@@ -1,5 +1,6 @@
 import { error, fail } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
+import { validateDisplayName } from '$lib/profile';
 import { normalizeUsername, validateUsername } from '$lib/username';
 
 export const load: PageServerLoad = async ({ locals: { supabase, safeGetSession } }) => {
@@ -60,13 +61,13 @@ export const actions: Actions = {
 		const { user } = await safeGetSession();
 		if (!user) error(401, 'no user');
 		const formData = await request.formData();
-		const displayName = formData.get('displayName')?.toString().trim();
-		if (!displayName) {
-			return fail(400, { error: 'Display name is required' });
+		const result = validateDisplayName(formData.get('displayName'));
+		if ('error' in result) {
+			return fail(400, { error: result.error });
 		}
 		const { error: err } = await supabase
 			.from('profiles')
-			.update({ display_name: displayName })
+			.update({ display_name: result.displayName })
 			.eq('user_id', user.id);
 		if (err) {
 			return fail(500, { error: err.message });

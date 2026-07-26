@@ -339,8 +339,12 @@
 				{#each sorted as user_rating}
 					<tr>
 						<td>{user_rating.rating}</td>
-						<td>{displayName(user_rating.user_id)}</td>
-						<td><a href="/profile/{user_rating.user_id}" class="btn">Go to profile</a></td>
+						<td>
+							<a class="link link-hover font-medium" href="/profile/{user_rating.user_id}">
+								{displayName(user_rating.user_id)}
+							</a>
+						</td>
+						<td><a href="/profile/{user_rating.user_id}" class="btn btn-sm">View profile</a></td>
 					</tr>
 				{/each}
 			</tbody>
