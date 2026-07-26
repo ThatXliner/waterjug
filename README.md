@@ -34,7 +34,7 @@
 
 ## Why WaterJug?
 
-Most rating apps are built around one game. WaterJug starts with the people instead: make a shared ladder for chess, table tennis, office foosball, fighting games, or whatever your group is currently taking far too seriously.
+Make a shared leaderboard for chess, table tennis, office foosball, fighting games, or whatever your group is currently taking far too seriously.
 
 - **One ladder per game** — create a game and get a dedicated, ranked leaderboard.
 - **Ratings that understand uncertainty** — an in-house Glicko implementation tracks both rating and rating deviation.
@@ -144,8 +144,29 @@ supabase/
 - [ ] Invite-only games
 - [ ] Rating history, predictions, and analytics
 - [ ] Real-time leaderboard updates
-- [ ] Configurable rating systems, defaults, periods, and formulas
+- [x] Configurable rating systems
+  - [x] Configurable default rating
+  - [x] Configurable rating period
+  - [x] Parameters for the Glicko system
+  - [x] Parameters for the Elo system
+  - [x] Safely evaluated custom formulas
 - [ ] Hardened and fully tested database policies
+
+## Rating configuration
+
+Each game stores one versioned rating configuration. Game owners choose Glicko, Elo, or a
+custom formula when creating a game and can change the configuration later without rewriting
+existing player ratings. New players receive the configured starting rating.
+
+- Glicko supports rating-period length, initial and maximum deviation, deviation increase per
+  inactive period, and rating scale.
+- Elo supports K-factor (default `32`, range `0.01`–`1000`) and rating scale (default
+  `400`, range `1`–`10000`). K-factor controls how quickly ratings move; scale controls how
+  strongly a rating gap changes the expected score.
+- Custom formulas return a player's new rating. They may use `rating`, `opponentRating`, `score`,
+  and `expected`, along with arithmetic and `abs`, `min`, `max`, `pow`, `round`, `floor`, and
+  `ceil`. Formulas are parsed by a restricted expression evaluator; JavaScript access, property
+  access, assignment, and other functions are not supported.
 
 ## Contributing
 

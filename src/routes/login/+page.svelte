@@ -1,8 +1,10 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 
 	let { data } = $props();
 	let supabase = $derived(data.supabase);
+	let resetComplete = $derived(page.url.searchParams.get('reset') === 'success');
 
 	onMount(() => {
 		supabase.auth.getSession().then(({ data: sessionData, error }) => {
@@ -17,19 +19,25 @@
 
 	let email = $state('');
 	let password = $state('');
+	let errorMessage = $state('');
+	let submitting = $state(false);
 
-	function handleForgotPassword() {
-		window.alert('Not implemented yet');
-	}
+	async function handleLogin(event: SubmitEvent) {
+		event.preventDefault();
+		if (submitting) return;
 
-	function handleLogin() {
-		supabase.auth.signInWithPassword({ email, password }).then(({ data, error }) => {
-			if (error != null) {
-				window.alert(error);
-				return;
-			}
-			console.log(data);
-		});
+		errorMessage = '';
+		submitting = true;
+
+		const { error } = await supabase.auth.signInWithPassword({ email, password });
+		submitting = false;
+
+		if (error != null) {
+			errorMessage = error.message;
+			return;
+		}
+
+		window.location.href = '/dashboard';
 	}
 </script>
 
@@ -52,7 +60,17 @@
 			</p>
 		</div>
 		<div class="card flex-shrink-0 w-full max-w-sm shadow-2xl bg-base-100">
-			<form class="card-body">
+			<form class="card-body" onsubmit={handleLogin}>
+				{#if resetComplete}
+					<div class="alert alert-success" role="status">
+						<span>Your password has been updated. You can now log in.</span>
+					</div>
+				{/if}
+				{#if errorMessage}
+					<div class="alert alert-error" role="alert">
+						<span>{errorMessage}</span>
+					</div>
+				{/if}
 				<div class="form-control">
 					<label class="label" for="email-input">
 						<span class="label-text">Email</span>
@@ -78,14 +96,14 @@
 						required
 						bind:value={password}
 					/>
-					<label class="label">
-						<button onclick={handleForgotPassword} class="label-text-alt link link-hover"
-							>Forgot password?</button
-						>
-					</label>
+					<div class="label">
+						<a href="/forgot-password" class="label-text-alt link link-hover">Forgot password?</a>
+					</div>
 				</div>
 				<div class="form-control mt-6">
-					<button class="btn btn-primary" onclick={handleLogin}>Login</button>
+					<button class="btn btn-primary" type="submit" disabled={submitting}>
+						{submitting ? 'Logging in…' : 'Login'}
+					</button>
 				</div>
 			</form>
 		</div>
