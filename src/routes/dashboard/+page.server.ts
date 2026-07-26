@@ -20,8 +20,24 @@ export const load: PageServerLoad = async ({ locals: { supabase, safeGetSession 
 		.select('display_name, username')
 		.eq('user_id', currentUserId)
 		.single();
+	const { data: pendingReviews, error: pendingError } = await supabase
+		.from('game_results')
+		.select('game_id')
+		.eq('status', 'pending')
+		.neq('reporter_id', currentUserId);
+	if (pendingError) {
+		error(500, 'Pending result reviews could not be loaded.');
+	}
+	const pendingReviewCounts = (pendingReviews ?? []).reduce<Record<number, number>>(
+		(counts, result) => {
+			counts[result.game_id] = (counts[result.game_id] ?? 0) + 1;
+			return counts;
+		},
+		{}
+	);
 	return {
 		ratings,
+		pendingReviewCounts,
 		displayName: profile?.display_name ?? '',
 		username: profile?.username ?? null,
 		userId: currentUserId

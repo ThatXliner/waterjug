@@ -70,6 +70,94 @@ export type Database = {
           },
         ]
       }
+      game_results: {
+        Row: {
+          configuration_revision: number
+          created_at: string
+          game_id: number
+          id: number
+          loser_id: string
+          loser_other_data_snapshot: Json
+          loser_rating_snapshot: number
+          loser_type_snapshot: string
+          rating_configuration_snapshot: Json
+          reporter_id: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          submission_id: string
+          updated_at: string
+          winner_id: string
+          winner_other_data_snapshot: Json
+          winner_rating_snapshot: number
+          winner_type_snapshot: string
+        }
+        Insert: {
+          configuration_revision?: number
+          created_at?: string
+          game_id: number
+          id?: number
+          loser_id: string
+          loser_other_data_snapshot?: Json
+          loser_rating_snapshot?: number
+          loser_type_snapshot?: string
+          rating_configuration_snapshot?: Json
+          reporter_id: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          submission_id: string
+          updated_at?: string
+          winner_id: string
+          winner_other_data_snapshot?: Json
+          winner_rating_snapshot?: number
+          winner_type_snapshot?: string
+        }
+        Update: {
+          configuration_revision?: number
+          created_at?: string
+          game_id?: number
+          id?: number
+          loser_id?: string
+          loser_other_data_snapshot?: Json
+          loser_rating_snapshot?: number
+          loser_type_snapshot?: string
+          rating_configuration_snapshot?: Json
+          reporter_id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          submission_id?: string
+          updated_at?: string
+          winner_id?: string
+          winner_other_data_snapshot?: Json
+          winner_rating_snapshot?: number
+          winner_type_snapshot?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_results_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["game_id"]
+          },
+          {
+            foreignKeyName: "game_results_game_id_loser_id_fkey"
+            columns: ["game_id", "loser_id"]
+            isOneToOne: false
+            referencedRelation: "ratings"
+            referencedColumns: ["game_id", "user_id"]
+          },
+          {
+            foreignKeyName: "game_results_game_id_winner_id_fkey"
+            columns: ["game_id", "winner_id"]
+            isOneToOne: false
+            referencedRelation: "ratings"
+            referencedColumns: ["game_id", "user_id"]
+          },
+        ]
+      }
       games: {
         Row: {
           created_at: string
@@ -258,6 +346,47 @@ export type Database = {
         Returns: number
       }
       ensure_game_rating: { Args: { p_game_id: number }; Returns: undefined }
+      review_game_result: {
+        Args: {
+          p_decision: string
+          p_expected_configuration_revision: number
+          p_loser_new_other_data?: Json
+          p_loser_new_rating?: number
+          p_loser_new_type?: string
+          p_result_id: number
+          p_reviewer_id: string
+          p_winner_new_other_data?: Json
+          p_winner_new_rating?: number
+          p_winner_new_type?: string
+        }
+        Returns: {
+          configuration_revision: number
+          created_at: string
+          game_id: number
+          id: number
+          loser_id: string
+          loser_other_data_snapshot: Json
+          loser_rating_snapshot: number
+          loser_type_snapshot: string
+          rating_configuration_snapshot: Json
+          reporter_id: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          submission_id: string
+          updated_at: string
+          winner_id: string
+          winner_other_data_snapshot: Json
+          winner_rating_snapshot: number
+          winner_type_snapshot: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "game_results"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
     }
     Enums: {
       app_role: "player" | "admin"

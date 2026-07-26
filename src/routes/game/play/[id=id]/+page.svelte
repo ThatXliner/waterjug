@@ -4,6 +4,7 @@
 
 	let { data, form } = $props();
 	let dbData = $derived(data.data);
+	let results = $derived(data.results);
 	let name = $derived(data.gameName);
 	let inviteOnly = $derived(data.inviteOnly);
 	let me = $derived(data.user);
@@ -17,10 +18,16 @@
 	function displayName(userId = '') {
 		return profileMap[userId] || userId.slice(0, 8);
 	}
+	/** @param {string} timestamp */
+	function displayTimestamp(timestamp) {
+		return `${new Date(timestamp).toISOString().replace('T', ' ').slice(0, 16)} UTC`;
+	}
 
 	let sorted = $derived([...dbData].sort((a, b) => b.rating - a.rating));
 	let modal = $state();
-	let winner = $state('');
+	let opponent = $state('');
+	let outcome = $state('won');
+	let submissionId = $state('');
 	let tournamentModal = $state();
 	let configurationModal = $state();
 	let configurationSystem = $state('glicko');
@@ -31,6 +38,9 @@
 	});
 
 	function openModal() {
+		opponent = '';
+		outcome = 'won';
+		submissionId = crypto.randomUUID();
 		showDialog(modal);
 	}
 	function openTournamentModal() {
@@ -52,15 +62,17 @@
 
 <dialog bind:this={modal} class="modal">
 	<div class="modal-box">
-		<h3 class="font-bold text-lg">I lost against...</h3>
-		<form method="POST" action="?/rate">
+		<h3 class="font-bold text-lg">Report a result</h3>
+		<p class="mb-4 text-sm opacity-70">Your opponent must confirm before ratings change.</p>
+		<form method="POST" action="?/reportResult" class="space-y-4">
+			<input type="hidden" name="submissionId" value={submissionId} />
 			<select
 				class="select select-bordered w-full max-w-xs"
-				bind:value={winner}
+				bind:value={opponent}
 				required
-				name="winner"
+				name="opponent"
 			>
-				<option disabled selected>Select a person</option>
+				<option disabled value="">Select your opponent</option>
 				{#each dbData as { user_id }}
 					{#if user_id == me}
 						<option disabled value={user_id}>{displayName(user_id)} (yourself)</option>
@@ -69,9 +81,22 @@
 					{/if}
 				{/each}
 			</select>
+			<div class="flex gap-4">
+				<label class="label cursor-pointer justify-start gap-2">
+					<input class="radio" type="radio" name="outcome" value="won" bind:group={outcome} />
+					<span>I won</span>
+				</label>
+				<label class="label cursor-pointer justify-start gap-2">
+					<input class="radio" type="radio" name="outcome" value="lost" bind:group={outcome} />
+					<span>I lost</span>
+				</label>
+			</div>
+			{#if form?.resultError}
+				<p class="text-error text-sm">{form.resultError}</p>
+			{/if}
 			<div class="modal-action">
 				<button class="btn" type="button" onclick={() => closeDialog(modal)}>Close</button>
-				<button class="btn btn-primary" type="submit" disabled={!winner}>Submit</button>
+				<button class="btn btn-primary" type="submit" disabled={!opponent}>Report result</button>
 			</div>
 		</form>
 	</div>
@@ -356,6 +381,81 @@
 			</tbody>
 		</table>
 	</div>
+
+	<section class="mx-auto w-full max-w-3xl">
+		<div class="mb-3 flex items-center justify-between">
+			<h4 class="text-2xl font-bold">Results</h4>
+			{#if form?.resultSuccess}
+				<span class="text-success text-sm">Result sent to your opponent.</span>
+			{:else if form?.reviewSuccess}
+				<span class="text-success text-sm">Result reviewed.</span>
+			{/if}
+		</div>
+		{#if form?.reviewError}
+			<div class="alert alert-error mb-3 text-sm">{form.reviewError}</div>
+		{/if}
+		{#if results.length === 0}
+			<p class="rounded-box border border-dashed p-5 text-center opacity-70">
+				No results reported yet.
+			</p>
+		{:else}
+			<div class="space-y-3">
+				{#each results as result}
+					<article class="card border border-base-300 bg-base-100 shadow-sm">
+						<div class="card-body gap-3 p-4">
+							<div class="flex flex-wrap items-center justify-between gap-2">
+								<p>
+									<a class="link link-hover font-semibold" href="/profile/{result.winner_id}">
+										{displayName(result.winner_id)}
+									</a>
+									beat
+									<a class="link link-hover font-semibold" href="/profile/{result.loser_id}">
+										{displayName(result.loser_id)}
+									</a>
+								</p>
+								<span
+									class:badge-warning={result.status === 'pending'}
+									class:badge-success={result.status === 'confirmed'}
+									class:badge-error={result.status === 'disputed'}
+									class="badge capitalize">{result.status}</span
+								>
+							</div>
+							<p class="text-xs opacity-65">
+								Reported by {displayName(result.reporter_id)} ·
+								{displayTimestamp(result.created_at)}
+							</p>
+							{#if result.status === 'pending' && result.reporter_id !== me}
+								<div class="rounded-box bg-warning/10 p-3">
+									<p class="mb-2 text-sm font-medium">This result is waiting for your review.</p>
+									<form method="POST" action="?/reviewResult" class="flex gap-2">
+										<input type="hidden" name="resultId" value={result.id} />
+										<button
+											class="btn btn-success btn-sm"
+											type="submit"
+											name="decision"
+											value="confirmed">Confirm</button
+										>
+										<button
+											class="btn btn-error btn-outline btn-sm"
+											type="submit"
+											name="decision"
+											value="disputed">Dispute</button
+										>
+									</form>
+								</div>
+							{:else if result.status === 'pending'}
+								<p class="text-sm text-warning">Waiting for your opponent to confirm or dispute.</p>
+							{:else if result.status === 'confirmed'}
+								<p class="text-sm text-success">Confirmed — ratings have been updated.</p>
+							{:else}
+								<p class="text-sm text-error">Disputed — ratings were not changed.</p>
+							{/if}
+						</div>
+					</article>
+				{/each}
+			</div>
+		{/if}
+	</section>
 
 	{#if tournaments.length > 0}
 		<div class="w-fit mx-auto mt-6">
