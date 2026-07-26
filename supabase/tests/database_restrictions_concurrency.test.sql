@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 
-select plan(11);
+select plan(17);
 
 select extensions.dblink_connect(
   'race_setup',
@@ -62,8 +62,12 @@ select extensions.dblink_exec(
         now()
       );
 
-    insert into public.games (game_id, name)
-    values (930001, 'Concurrent restriction fixture');
+    insert into public.games (game_id, name, created_by)
+    values (
+      930001,
+      'Concurrent restriction fixture',
+      '33333333-3333-4333-8333-333333333333'
+    );
 
     insert into public.tournaments (
       tournament_id,
@@ -268,6 +272,118 @@ select results_eq(
   $query$,
   array[1::bigint],
   'exactly one row survives the authorized duplicate-insert race'
+);
+
+-- Rating configuration updates use the revision as a compare-and-set token.
+-- A non-owner must be filtered before contending on the owner lock, while two
+-- owner sessions starting from the same revision must serialize to one winner.
+select extensions.dblink_exec('race_owner', 'begin');
+select extensions.dblink_exec('race_owner', 'set local role authenticated');
+select extensions.dblink_exec(
+  'race_owner',
+  $sql$
+    set local "request.jwt.claim.sub" =
+      '33333333-3333-4333-8333-333333333333'
+  $sql$
+);
+select extensions.dblink_exec('race_other', 'begin');
+select extensions.dblink_exec('race_other', 'set local role authenticated');
+select extensions.dblink_exec(
+  'race_other',
+  $sql$
+    set local "request.jwt.claim.sub" =
+      '44444444-4444-4444-8444-444444444444'
+  $sql$
+);
+select extensions.dblink_exec('race_other', $$set local lock_timeout = '750ms'$$);
+select extensions.dblink_exec('race_owner_b', 'begin');
+select extensions.dblink_exec('race_owner_b', 'set local role authenticated');
+select extensions.dblink_exec(
+  'race_owner_b',
+  $sql$
+    set local "request.jwt.claim.sub" =
+      '33333333-3333-4333-8333-333333333333'
+  $sql$
+);
+
+select is(
+  extensions.dblink_exec(
+    'race_owner',
+    $sql$
+      update public.games
+      set rating_configuration =
+            jsonb_set(rating_configuration, '{defaultRating}', '1300'::jsonb),
+          rating_configuration_revision = 2
+      where game_id = 930001
+        and rating_configuration_revision = 1
+    $sql$
+  ),
+  'UPDATE 1',
+  'the first owner locks and advances the expected configuration revision'
+);
+select is(
+  extensions.dblink_exec(
+    'race_other',
+    $sql$
+      update public.games
+      set rating_configuration =
+            jsonb_set(rating_configuration, '{defaultRating}', '9000'::jsonb),
+          rating_configuration_revision = 2
+      where game_id = 930001
+        and rating_configuration_revision = 1
+    $sql$
+  ),
+  'UPDATE 0',
+  'a non-owner configuration update is filtered without waiting on the owner lock'
+);
+select is(
+  extensions.dblink_send_query(
+    'race_owner_b',
+    $sql$
+      update public.games
+      set rating_configuration =
+            jsonb_set(rating_configuration, '{defaultRating}', '1400'::jsonb),
+          rating_configuration_revision = 2
+      where game_id = 930001
+        and rating_configuration_revision = 1
+    $sql$
+  ),
+  1,
+  'a competing owner configuration update starts asynchronously'
+);
+select is(
+  extensions.dblink_is_busy('race_owner_b'),
+  1,
+  'the competing owner update waits on the uncommitted revision'
+);
+select extensions.dblink_exec('race_owner', 'commit');
+select results_eq(
+  $query$
+    select status
+    from extensions.dblink_get_result('race_owner_b') as result(status text)
+  $query$,
+  array['UPDATE 0'::text],
+  'the stale owner compare-and-set loses after the winning revision commits'
+);
+select extensions.dblink_exec('race_owner_b', 'commit');
+select extensions.dblink_exec('race_other', 'rollback');
+select results_eq(
+  $query$
+    select state
+    from extensions.dblink(
+      'race_setup',
+      $sql$
+        select
+          rating_configuration_revision::text
+          || ':'
+          || (rating_configuration->>'defaultRating')
+        from public.games
+        where game_id = 930001
+      $sql$
+    ) as result(state text)
+  $query$,
+  array['2:1300'::text],
+  'exactly the winning owner configuration and revision remain committed'
 );
 
 select extensions.dblink_disconnect('race_owner');

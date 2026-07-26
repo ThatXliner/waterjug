@@ -124,6 +124,26 @@ begin
       end if;
 
       begin
+        insert into public.games (name, created_by)
+        values (
+          format('actor-%s-claims-game-owner-%s', actor_number, owner_number),
+          owner_id
+        );
+
+        if not should_succeed then
+          raise notice 'forged game accepted: actor %, owner %',
+            actor_number, owner_number;
+          return false;
+        end if;
+      exception
+        when insufficient_privilege then
+          if should_succeed then
+            raise notice 'owned game rejected: actor %', actor_number;
+            return false;
+          end if;
+      end;
+
+      begin
         insert into public.tournaments (
           game_id,
           name,
@@ -192,7 +212,7 @@ select results_eq(
 set local "request.jwt.claim.sub" = 'not-a-uuid';
 
 select throws_ok(
-  $$insert into public.games (name) values ('malformed identity')$$,
+  $$insert into public.games (name, created_by) values ('malformed identity', '00000000-0000-4000-8000-000000000001')$$,
   '22P02',
   null,
   'a malformed JWT subject fails closed'
@@ -208,7 +228,11 @@ select lives_ok(
     begin
       foreach bad_name in array array['', ' ', E'\t', E'\n', E' \t\n ', null] loop
         begin
-          insert into public.games (name) values (bad_name);
+          insert into public.games (name, created_by)
+          values (
+            bad_name,
+            '00000000-0000-4000-8000-000000000001'
+          );
           raise exception 'blank game name accepted';
         exception
           when check_violation or not_null_violation then null;

@@ -14,13 +14,13 @@ policy.
 
 ## Required access matrix
 
-| Table                     | Anonymous | Authenticated                 | Row restriction                                                                                                                          |
-| ------------------------- | --------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `games`                   | Select    | Select, insert                | An insert requires a non-null `auth.uid()`; update and delete are unavailable.                                                           |
-| `profiles`                | Select    | Select, update `display_name` | A user may update only their own row. `user_id` and `created_at` are immutable to API users. Rows are inserted only by the Auth trigger. |
-| `ratings`                 | Select    | Select, insert, update        | A user may insert or update only a row whose `user_id` equals `auth.uid()`. Delete is unavailable.                                       |
-| `tournaments`             | Select    | Select, insert, update        | `created_by` must equal `auth.uid()` on insert and remain so on update. Only the creator can update the row. Delete is unavailable.      |
-| `tournament_participants` | Select    | Select, insert                | Only the tournament creator may add participants. Update and delete are unavailable.                                                     |
+| Table                     | Anonymous | Authenticated                                                                                                                      | Row restriction                                                                                                                                                |
+| ------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `games`                   | Select    | Select; insert `name`, `created_by`, and `rating_configuration`; update `rating_configuration` and `rating_configuration_revision` | A new game must be owned by `auth.uid()`. Only its owner may update rating settings; identity, ownership, name, timestamp, and initial revision are protected. |
+| `profiles`                | Select    | Select, update `display_name`                                                                                                      | A user may update only their own row. `user_id` and `created_at` are immutable to API users. Rows are inserted only by the Auth trigger.                       |
+| `ratings`                 | Select    | Select, insert, update                                                                                                             | A user may insert or update only a row whose `user_id` equals `auth.uid()`. Delete is unavailable.                                                             |
+| `tournaments`             | Select    | Select, insert, update                                                                                                             | `created_by` must equal `auth.uid()` on insert and remain so on update. Only the creator can update the row. Delete is unavailable.                            |
+| `tournament_participants` | Select    | Select, insert                                                                                                                     | Only the tournament creator may add participants. Update and delete are unavailable.                                                                           |
 
 All five tables must have RLS enabled. Public select access is intentional:
 games, ratings, display names, tournaments, and participant lists are product
@@ -29,6 +29,13 @@ data shown on public game and profile pages.
 Database values must also preserve these invariants:
 
 - Game and tournament names contain at least one non-whitespace character.
+- A game rating configuration has exactly the documented version-1 object
+  shape, valid bounded numeric values, a supported system, and a non-blank
+  formula of at most 500 characters.
+- Rating configuration and revision updates are atomic: a changed configuration
+  increments the positive revision by exactly one, and the revision cannot
+  change on its own. This preserves the application's compare-and-set contract
+  under concurrent owner updates.
 - Ratings are finite IEEE-754 values; `NaN` and positive/negative infinity are
   rejected.
 - Rating metadata is a JSON object.
@@ -42,7 +49,7 @@ Data API roles.
 ## Verification
 
 The pgTAP suite in
-`supabase/tests/` contains 69 top-level assertions. Generated assertions
+`supabase/tests/` contains 94 top-level assertions across four files. Generated assertions
 exercise many cases internally rather than inflating the TAP count. The suite
 verifies:
 
@@ -54,13 +61,20 @@ verifies:
 - An `authenticated` database role without a JWT user identity cannot create a
   game.
 - An exhaustive generated matrix covers every pairing of eight actors and
-  eight resource owners across profile, rating, tournament, and participant
-  operations (hundreds of policy decisions).
+  eight resource owners across game creation, profile and rating updates,
+  tournament creation and updates, and participant insertion (384 policy
+  decisions).
 - Generated malformed names, identities, states, types, rating values, and JSON
   shapes fail closed while valid numeric boundaries remain accepted.
+- Generated rating-configuration cases cover missing, null, array, extra-key,
+  wrong-type, fractional-version, out-of-range, and blank/oversized formula
+  inputs, plus all accepted numeric and formula-length boundaries.
 - Independent database sessions verify that non-owner updates and participant
   inserts cannot win or block on concurrent owner transactions, and that two
   authorized inserts of the same participant serialize to exactly one row.
+- Independent owner sessions racing the same rating-configuration revision
+  serialize to one committed winner; a non-owner is filtered without waiting,
+  and the stale owner compare-and-set affects zero rows.
 
 Run the database checks against the local Supabase stack:
 
@@ -85,5 +99,10 @@ those fixtures before finishing.
   `completed` may return to `active`), so tests cover the current
   `pending` → `active` → `completed` path without inventing transition rules.
 - The race suite covers conflicting owner/non-owner writes, duplicate
-  authorized inserts, lock behavior, and committed outcomes. It does not
-  attempt performance, soak, or load testing.
+  authorized inserts, rating-configuration compare-and-set updates, lock
+  behavior, and committed outcomes. It does not attempt performance, soak, or
+  load testing.
+- PostgreSQL validates the persisted rating-configuration structure, bounds,
+  system name, and formula string size. Parsing and safely evaluating custom
+  formula syntax remains application-library behavior and is covered by the
+  rating unit and property tests.

@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(44);
+select plan(47);
 
 -- The five application tables are all exposed through the public schema, so
 -- every one must have RLS enabled.
@@ -63,9 +63,36 @@ select ok(
 
 -- Authenticated privileges are deliberately narrower than ALL.
 select ok(
-  has_table_privilege('authenticated', 'public.games', 'select,insert')
-    and not has_table_privilege('authenticated', 'public.games', 'update,delete'),
-  'authenticated users can read and create games only'
+  has_table_privilege('authenticated', 'public.games', 'select')
+    and not has_table_privilege('authenticated', 'public.games', 'insert,update,delete')
+    and has_column_privilege('authenticated', 'public.games', 'name', 'insert')
+    and has_column_privilege('authenticated', 'public.games', 'created_by', 'insert')
+    and has_column_privilege(
+      'authenticated',
+      'public.games',
+      'rating_configuration',
+      'insert,update'
+    )
+    and has_column_privilege(
+      'authenticated',
+      'public.games',
+      'rating_configuration_revision',
+      'update'
+    ),
+  'authenticated game writes are limited to creation and rating configuration columns'
+);
+select ok(
+  not has_column_privilege('authenticated', 'public.games', 'game_id', 'insert,update')
+    and not has_column_privilege('authenticated', 'public.games', 'created_at', 'insert,update')
+    and not has_column_privilege('authenticated', 'public.games', 'created_by', 'update')
+    and not has_column_privilege('authenticated', 'public.games', 'name', 'update')
+    and not has_column_privilege(
+      'authenticated',
+      'public.games',
+      'rating_configuration_revision',
+      'insert'
+    ),
+  'game identity, ownership, name, timestamp, and initial revision are protected'
 );
 select ok(
   has_column_privilege('authenticated', 'public.profiles', 'display_name', 'update'),
@@ -222,8 +249,20 @@ set local role authenticated;
 set local "request.jwt.claim.sub" = '11111111-1111-4111-8111-111111111111';
 
 select lives_ok(
-  $$insert into public.games (name) values ('owner-created game')$$,
+  $$insert into public.games (name, created_by) values ('owner-created game', '11111111-1111-4111-8111-111111111111')$$,
   'an authenticated user can create a game'
+);
+select throws_ok(
+  $$insert into public.games (name, created_by) values ('spoofed game', '22222222-2222-4222-8222-222222222222')$$,
+  '42501',
+  null,
+  'an authenticated user cannot create a game for another owner'
+);
+select throws_ok(
+  $$insert into public.games (name, created_by) values ('ownerless game', null)$$,
+  '42501',
+  null,
+  'an authenticated user cannot create an ownerless game'
 );
 select lives_ok(
   $$update public.profiles set display_name = 'Owner' where user_id = '11111111-1111-4111-8111-111111111111'$$,
@@ -301,7 +340,7 @@ set local role authenticated;
 reset "request.jwt.claim.sub";
 
 select throws_ok(
-  $$insert into public.games (name) values ('missing identity')$$,
+  $$insert into public.games (name, created_by) values ('missing identity', '11111111-1111-4111-8111-111111111111')$$,
   '42501',
   null,
   'the authenticated role without a user identity cannot create a game'
