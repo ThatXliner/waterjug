@@ -18,26 +18,8 @@ describe('rating configuration', () => {
 		expect(parseRatingConfiguration({})).toEqual(DEFAULT_RATING_CONFIGURATION);
 	});
 
-	test('upgrades legacy Glicko configuration to Glicko-2 defaults', () => {
-		expect(
-			parseRatingConfiguration({
-				version: 1,
-				glicko: {
-					initialDeviation: 200,
-					maxDeviation: 300,
-					periodDeviationIncrease: 50,
-					scale: 400
-				}
-			})
-		).toMatchObject({
-			version: 2,
-			glicko: {
-				initialDeviation: 200,
-				maxDeviation: 300,
-				initialVolatility: 0.06,
-				tau: 0.5
-			}
-		});
+	test('rejects version 1 configurations', () => {
+		expect(() => parseRatingConfiguration({ version: 1 })).toThrow('version must be 2');
 	});
 
 	test('rejects invalid values with actionable field names', () => {
