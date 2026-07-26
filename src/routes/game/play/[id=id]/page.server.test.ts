@@ -15,8 +15,8 @@ describe('rating result authorization', () => {
 	});
 
 	it('rejects anonymous submissions before creating a privileged client', async () => {
-		const action = actions.default;
-		if (!action) throw new Error('default action is missing');
+		const action = actions.rate;
+		if (!action) throw new Error('rate action is missing');
 
 		await expect(
 			action({
@@ -29,8 +29,8 @@ describe('rating result authorization', () => {
 	});
 
 	it('rejects self-reported wins before creating a privileged client', async () => {
-		const action = actions.default;
-		if (!action) throw new Error('default action is missing');
+		const action = actions.rate;
+		if (!action) throw new Error('rate action is missing');
 		const formData = new FormData();
 		formData.set('winner', user.id);
 
@@ -52,8 +52,8 @@ describe('rating result authorization', () => {
 	});
 
 	it('rejects generated malformed winner credentials before privileged access', async () => {
-		const action = actions.default;
-		if (!action) throw new Error('default action is missing');
+		const action = actions.rate;
+		if (!action) throw new Error('rate action is missing');
 
 		await fc.assert(
 			fc.asyncProperty(
