@@ -163,10 +163,21 @@ existing player ratings. New players receive the configured starting rating.
 - Elo supports K-factor (default `32`, range `0.01`–`1000`) and rating scale (default
   `400`, range `1`–`10000`). K-factor controls how quickly ratings move; scale controls how
   strongly a rating gap changes the expected score.
-- Custom formulas return a player's new rating. They may use `rating`, `opponentRating`, `score`,
-  and `expected`, along with arithmetic and `abs`, `min`, `max`, `pow`, `round`, `floor`, and
-  `ceil`. Formulas are parsed by a restricted expression evaluator; JavaScript access, property
-  access, assignment, and other functions are not supported.
+- Custom formulas return a player's new rating. Available variables are `rating`,
+  `opponentRating`, `score` (`0`, `0.5`, or `1`), and the Elo-style win probability `expected`.
+  Formulas support parentheses, unary `+`/`-`, arithmetic `+`, `-`, `*`, `/`, `%`, and `^`, and
+  decimal or scientific-notation number literals. Supported functions are `abs`, `round`,
+  `floor`, and `ceil` with one argument; `pow` with two arguments; and `min`/`max` with one to
+  ten arguments.
+
+Custom formulas are parsed as expressions and never passed to JavaScript evaluation. Property
+access, assignment, strings, arrays, comments, unknown identifiers, and calls to any other
+function are rejected. Formulas are limited to 500 characters, 200 tokens, and 32 nested
+expressions. Numeric literals, context variables, and the final result must be finite, and the
+result must be between -1,000,000,000 and 1,000,000,000. Validation errors name the unsupported
+construct or expected input and include its character location when one is available. These
+bounds constrain parsing and evaluation work; they do not make custom formulas suitable for
+general-purpose scripting.
 
 Glicko configuration accepts initial and maximum deviations from `1` to `1000`, deviation
 increase from `0` to `1000`, and a scale from `1` to `10000`. Its deviation calculations use
