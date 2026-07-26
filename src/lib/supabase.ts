@@ -252,7 +252,7 @@ export type Database = {
       create_game: {
         Args: {
           game_name: string
-          game_rating_configuration: Json
+          game_rating_configuration?: Json
           invited_emails?: string[]
           is_invite_only?: boolean
         }

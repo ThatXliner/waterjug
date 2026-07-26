@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { DEFAULT_RATING_CONFIGURATION } from './rating';
 import type { Database } from './supabase';
 
 const environment = (
@@ -51,6 +52,7 @@ describe.skipIf(!hasSupabaseEnvironment)('invite-only games through the Data API
 	async function createPrivateGame(name: string, invitedEmails: string[]) {
 		const { data, error } = await owner.rpc('create_game', {
 			game_name: name,
+			game_rating_configuration: DEFAULT_RATING_CONFIGURATION,
 			is_invite_only: true,
 			invited_emails: invitedEmails
 		});
@@ -136,11 +138,23 @@ describe.skipIf(!hasSupabaseEnvironment)('invite-only games through the Data API
 		for (const testCase of cases) {
 			const { error } = await testCase.client.rpc('create_game', {
 				game_name: testCase.name,
+				game_rating_configuration: DEFAULT_RATING_CONFIGURATION,
 				is_invite_only: true,
 				invited_emails: testCase.emails
 			});
 			expect(error?.code, testCase.label).toBe(testCase.code);
 		}
+
+		const { error: invalidConfigurationError } = await owner.rpc('create_game', {
+			game_name: `${gamePrefix}-invalid-configuration`,
+			game_rating_configuration: {
+				...DEFAULT_RATING_CONFIGURATION,
+				defaultRating: -1
+			},
+			is_invite_only: true,
+			invited_emails: [emails.invited]
+		});
+		expect(invalidConfigurationError?.code).toBe('23514');
 
 		const { count, error } = await service
 			.from('games')
@@ -160,7 +174,7 @@ describe.skipIf(!hasSupabaseEnvironment)('invite-only games through the Data API
 
 		const { data: game } = await service
 			.from('games')
-			.select('name, invite_only, created_by')
+			.select('name, invite_only, created_by, rating_configuration')
 			.eq('game_id', gameId)
 			.single();
 		const { data: gameInvites } = await service
@@ -169,7 +183,12 @@ describe.skipIf(!hasSupabaseEnvironment)('invite-only games through the Data API
 			.eq('game_id', gameId)
 			.order('invited_email');
 
-		expect(game).toEqual({ name, invite_only: true, created_by: ownerId });
+		expect(game).toEqual({
+			name,
+			invite_only: true,
+			created_by: ownerId,
+			rating_configuration: DEFAULT_RATING_CONFIGURATION
+		});
 		expect(gameInvites).toEqual([
 			{ invited_email: emails.invited },
 			{ invited_email: emails.outsider }
@@ -242,10 +261,36 @@ describe.skipIf(!hasSupabaseEnvironment)('invite-only games through the Data API
 		const ownerGameId = await createPrivateGame(`${gamePrefix}-owner-scope`, [emails.invited]);
 		const { data: outsiderGameId, error: outsiderCreateError } = await outsider.rpc('create_game', {
 			game_name: `${gamePrefix}-outsider-scope`,
+			game_rating_configuration: DEFAULT_RATING_CONFIGURATION,
 			is_invite_only: true,
 			invited_emails: [emails.outsider]
 		});
 		expect(outsiderCreateError).toBeNull();
+
+		const ownerConfiguration = {
+			...DEFAULT_RATING_CONFIGURATION,
+			system: 'elo' as const,
+			defaultRating: 1500
+		};
+		const { data: ownerUpdate, error: ownerUpdateError } = await owner
+			.from('games')
+			.update({ rating_configuration: ownerConfiguration })
+			.eq('game_id', ownerGameId)
+			.select('rating_configuration');
+		const { data: deniedConfigurationUpdate, error: deniedConfigurationError } = await invited
+			.from('games')
+			.update({
+				rating_configuration: {
+					...ownerConfiguration,
+					defaultRating: 1600
+				}
+			})
+			.eq('game_id', ownerGameId)
+			.select('rating_configuration');
+		expect(ownerUpdateError).toBeNull();
+		expect(ownerUpdate).toEqual([{ rating_configuration: ownerConfiguration }]);
+		expect(deniedConfigurationError).toBeNull();
+		expect(deniedConfigurationUpdate).toEqual([]);
 
 		const { error: forgedGameError } = await invited.from('games').insert({
 			name: `${gamePrefix}-forged-owner`,
@@ -265,11 +310,17 @@ describe.skipIf(!hasSupabaseEnvironment)('invite-only games through the Data API
 			.from('games')
 			.select('game_id')
 			.eq('game_id', outsiderGameId!);
+		const { data: storedConfiguration } = await service
+			.from('games')
+			.select('rating_configuration')
+			.eq('game_id', ownerGameId)
+			.single();
 
 		expect(forgedGameError?.code).toBe('42501');
 		expect(forgedInviteError).not.toBeNull();
 		expect(leakedOwnerGame).toEqual([]);
 		expect(leakedOutsiderGame).toEqual([]);
+		expect(storedConfiguration?.rating_configuration).toEqual(ownerConfiguration);
 	});
 
 	it('converges concurrent invited joins to one row and denies every outsider race', async () => {

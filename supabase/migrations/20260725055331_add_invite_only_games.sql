@@ -24,7 +24,7 @@ create table public.game_invites (
 alter table public.game_invites enable row level security;
 
 grant select on table public.games to anon;
-grant select, insert on table public.games to authenticated;
+grant select, insert, update on table public.games to authenticated;
 grant all on table public.games to service_role;
 grant usage, select on sequence public.games_game_id_seq to authenticated;
 grant all on sequence public.games_game_id_seq to service_role;
@@ -45,6 +45,7 @@ grant all on table public.tournament_participants to service_role;
 
 drop policy "Enable insert for authenticated users only" on public.games;
 drop policy "Enable read access for all users" on public.games;
+drop policy "Game owners may update rating configuration" on public.games;
 drop policy "Enable read access for all users" on public.ratings;
 drop policy "You may only add your own rating" on public.ratings;
 drop policy "You may only update your own rating" on public.ratings;
@@ -57,6 +58,12 @@ drop policy "Enable insert for authenticated users" on public.tournament_partici
 create policy "Authenticated users can create owned games"
 	on public.games for insert
 	to authenticated
+	with check ((select auth.uid()) = created_by);
+
+create policy "Game owners may update rating configuration"
+	on public.games for update
+	to authenticated
+	using ((select auth.uid()) = created_by)
 	with check ((select auth.uid()) = created_by);
 
 create policy "Users can view accessible games"

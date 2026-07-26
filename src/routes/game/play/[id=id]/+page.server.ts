@@ -22,9 +22,7 @@ const MAX_RESULT_UPDATE_ATTEMPTS = 3;
 async function requireGameAccess(supabase: SupabaseClient<Database>, gameId: number) {
 	const { data: game, error: accessError } = await supabase
 		.from('games')
-		.select(
-			'name, invite_only, created_by, rating_configuration, rating_configuration_revision'
-		)
+		.select('name, invite_only, created_by, rating_configuration, rating_configuration_revision')
 		.eq('game_id', gameId)
 		.maybeSingle();
 
