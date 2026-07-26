@@ -248,7 +248,6 @@ export type Database = {
         }
         Returns: boolean
       }
-      ensure_game_rating: { Args: { p_game_id: number }; Returns: undefined }
       create_game: {
         Args: {
           game_name: string
@@ -258,6 +257,7 @@ export type Database = {
         }
         Returns: number
       }
+      ensure_game_rating: { Args: { p_game_id: number }; Returns: undefined }
     }
     Enums: {
       app_role: "player" | "admin"

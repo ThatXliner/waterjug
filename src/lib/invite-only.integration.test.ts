@@ -49,10 +49,14 @@ describe.skipIf(!hasSupabaseEnvironment)('invite-only games through the Data API
 		return client;
 	}
 
-	async function createPrivateGame(name: string, invitedEmails: string[]) {
+	async function createPrivateGame(
+		name: string,
+		invitedEmails: string[],
+		ratingConfiguration = DEFAULT_RATING_CONFIGURATION
+	) {
 		const { data, error } = await owner.rpc('create_game', {
 			game_name: name,
-			game_rating_configuration: DEFAULT_RATING_CONFIGURATION,
+			game_rating_configuration: ratingConfiguration,
 			is_invite_only: true,
 			invited_emails: invitedEmails
 		});
@@ -205,9 +209,8 @@ describe.skipIf(!hasSupabaseEnvironment)('invite-only games through the Data API
 			.maybeSingle();
 		expect(visibleBefore?.game_id).toBe(gameId);
 
-		const { error: joinError } = await invited.from('ratings').insert({
-			game_id: gameId,
-			user_id: invitedId
+		const { error: joinError } = await invited.rpc('ensure_game_rating', {
+			p_game_id: gameId
 		});
 		expect(joinError).toBeNull();
 
@@ -227,12 +230,9 @@ describe.skipIf(!hasSupabaseEnvironment)('invite-only games through the Data API
 			.from('ratings')
 			.select('user_id')
 			.eq('game_id', gameId);
-		const { error: deniedRejoin } = await invited
-			.from('ratings')
-			.upsert(
-				{ game_id: gameId, user_id: invitedId },
-				{ onConflict: 'user_id,game_id', ignoreDuplicates: true }
-			);
+		const { error: deniedRejoin } = await invited.rpc('ensure_game_rating', {
+			p_game_id: gameId
+		});
 		expect(hiddenGame).toBeNull();
 		expect(hiddenRating).toEqual([]);
 		expect(deniedRejoin?.code).toBe('42501');
@@ -324,31 +324,56 @@ describe.skipIf(!hasSupabaseEnvironment)('invite-only games through the Data API
 	});
 
 	it('converges concurrent invited joins to one row and denies every outsider race', async () => {
-		const gameId = await createPrivateGame(`${gamePrefix}-race`, [emails.invited]);
+		const raceConfiguration = {
+			...structuredClone(DEFAULT_RATING_CONFIGURATION),
+			defaultRating: 1675,
+			glicko: {
+				...DEFAULT_RATING_CONFIGURATION.glicko,
+				initialDeviation: 275
+			}
+		};
+		const gameId = await createPrivateGame(
+			`${gamePrefix}-race`,
+			[emails.invited],
+			raceConfiguration
+		);
 		const invitedAttempts = await Promise.all(
 			Array.from({ length: 25 }, () =>
-				invited
-					.from('ratings')
-					.upsert(
-						{ game_id: gameId, user_id: invitedId },
-						{ onConflict: 'user_id,game_id', ignoreDuplicates: true }
-					)
+				invited.rpc('ensure_game_rating', {
+					p_game_id: gameId
+				})
 			)
 		);
 		expect(invitedAttempts.every(({ error }) => error === null)).toBe(true);
 
 		const outsiderAttempts = await Promise.all(
 			Array.from({ length: 25 }, () =>
-				outsider.from('ratings').insert({ game_id: gameId, user_id: outsiderId })
+				outsider.rpc('ensure_game_rating', {
+					p_game_id: gameId
+				})
 			)
 		);
 		expect(outsiderAttempts.every(({ error }) => error?.code === '42501')).toBe(true);
 
+		const { error: deniedDirectInsert } = await outsider.from('ratings').insert({
+			game_id: gameId,
+			user_id: outsiderId
+		});
+		expect(deniedDirectInsert?.code).toBe('42501');
+
 		const { data: ratings, error } = await service
 			.from('ratings')
-			.select('user_id')
+			.select('user_id, rating, type, other_data')
 			.eq('game_id', gameId);
 		expect(error).toBeNull();
-		expect(ratings).toEqual([{ user_id: invitedId }]);
+		expect(ratings).toHaveLength(1);
+		expect(ratings?.[0]).toMatchObject({
+			user_id: invitedId,
+			rating: 1675,
+			type: 'glicko',
+			other_data: {
+				deviation: 275
+			}
+		});
 	}, 30_000);
 });

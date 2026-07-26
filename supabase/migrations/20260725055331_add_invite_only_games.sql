@@ -204,6 +204,50 @@ create policy "Users can add participants to accessible tournaments"
 		)
 	);
 
+create or replace function public.ensure_game_rating(p_game_id bigint)
+returns void
+language plpgsql
+volatile
+security invoker
+set search_path = ''
+as $$
+declare
+	rating_snapshot jsonb;
+begin
+	if auth.uid() is null then
+		raise exception 'Authentication required' using errcode = '42501';
+	end if;
+
+	select games.rating_configuration
+	into rating_snapshot
+	from public.games
+	where games.game_id = p_game_id;
+
+	if not found then
+		raise exception 'Game not found or you do not have permission to join it'
+			using errcode = '42501';
+	end if;
+
+	insert into public.ratings (game_id, user_id, rating, type, other_data)
+	values (
+		p_game_id,
+		auth.uid(),
+		(rating_snapshot->>'defaultRating')::double precision,
+		rating_snapshot->>'system',
+		jsonb_strip_nulls(jsonb_build_object(
+			'deviation',
+			case
+				when rating_snapshot->>'system' = 'glicko'
+				then (rating_snapshot#>>'{glicko,initialDeviation}')::double precision
+			end,
+			'lastRatedAt',
+			current_timestamp
+		))::json
+	)
+	on conflict (user_id, game_id) do nothing;
+end;
+$$;
+
 create or replace function public.create_game(
 	game_name text,
 	is_invite_only boolean default false,

@@ -1,6 +1,6 @@
 begin;
 
-select plan(11);
+select plan(14);
 
 insert into auth.users (
 	id,
@@ -103,6 +103,25 @@ select throws_ok(
 	null,
 	'an uninvited user cannot join the invite-only game'
 );
+select throws_ok(
+	format(
+		'select public.ensure_game_rating(%s)',
+		(select game_id from public.games where name = 'Public test game') - 1
+	),
+	'42501',
+	null,
+	'the join RPC clearly denies access without disclosing the inaccessible game'
+);
+select is(
+	(
+		select count(*)::integer
+		from public.ratings
+		where user_id = '00000000-0000-0000-0000-000000000003'
+			and game_id = (select game_id from public.games where name = 'Public test game') - 1
+	),
+	0,
+	'the join RPC cannot create an uninvited rating'
+);
 select lives_ok(
 	format(
 		'insert into public.ratings (game_id, user_id) values (%s, %L)',
@@ -139,11 +158,20 @@ select is(
 );
 select lives_ok(
 	format(
-		'insert into public.ratings (game_id, user_id) values (%s, %L)',
-		(select game_id from public.games where name = 'Private test game'),
-		'00000000-0000-0000-0000-000000000002'
+		'select public.ensure_game_rating(%s)',
+		(select game_id from public.games where name = 'Private test game')
 	),
-	'an invited user can join the invite-only game'
+	'an invited user can join the invite-only game through the atomic RPC'
+);
+select is(
+	(
+		select rating::integer
+		from public.ratings
+		where game_id = (select game_id from public.games where name = 'Private test game')
+			and user_id = '00000000-0000-0000-0000-000000000002'
+	),
+	1200,
+	'the invited join snapshots the configured default rating'
 );
 
 select * from finish();
