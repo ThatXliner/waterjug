@@ -30,6 +30,8 @@ jobs:
           bunx supabase start
           bunx supabase db reset
           bunx supabase migration up --local
+      - name: Verify database restrictions
+        run: bun run test:db
       - run: bun run test
       - name: Test authorization privileges
         run: bun run test:database:authorization

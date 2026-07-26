@@ -239,9 +239,26 @@ databaseDescribe('Supabase authorization invariants', () => {
 				])
 			);
 
+			const { data: configurationState, error: configurationReadError } = await service
+				.from('games')
+				.select('rating_configuration')
+				.eq('game_id', gameId)
+				.single();
+			expect(configurationReadError).toBeNull();
+			const currentConfiguration = configurationState!.rating_configuration;
+			if (
+				currentConfiguration === null ||
+				Array.isArray(currentConfiguration) ||
+				typeof currentConfiguration !== 'object'
+			) {
+				throw new Error('expected an object rating configuration');
+			}
 			const { error: revisionError } = await service
 				.from('games')
-				.update({ rating_configuration_revision: 2 })
+				.update({
+					rating_configuration: { ...currentConfiguration, defaultRating: 1201 },
+					rating_configuration_revision: 2
+				})
 				.eq('game_id', gameId);
 			expect(revisionError).toBeNull();
 			const { data: staleConfigurationApplied, error: staleConfigurationError } = await service.rpc(

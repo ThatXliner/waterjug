@@ -2,7 +2,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(40);
+SELECT plan(43);
 
 INSERT INTO auth.users (id, email)
 VALUES
@@ -392,7 +392,9 @@ RESET ROLE;
 SET LOCAL ROLE service_role;
 
 UPDATE public.games
-SET rating_configuration_revision = 8
+SET rating_configuration =
+      jsonb_set(rating_configuration, '{defaultRating}', '1201'::jsonb),
+    rating_configuration_revision = 8
 WHERE game_id = 9001;
 
 SELECT throws_ok(
@@ -505,6 +507,54 @@ SELECT is(
    WHERE submission_id = '10000000-0000-0000-0000-000000000005'),
   'disputed',
   'the private result reaches one terminal state'
+);
+
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claim.sub = '00000000-0000-0000-0000-000000000101';
+
+INSERT INTO public.game_results (
+  game_id, reporter_id, submission_id, winner_id, loser_id
+)
+VALUES (
+  9001,
+  '00000000-0000-0000-0000-000000000101',
+  '10000000-0000-0000-0000-000000000006',
+  '00000000-0000-0000-0000-000000000101',
+  '00000000-0000-0000-0000-000000000102'
+);
+
+RESET ROLE;
+SET LOCAL ROLE service_role;
+
+SELECT throws_ok(
+  $$
+    SELECT public.review_game_result(
+      (SELECT id FROM public.game_results
+       WHERE submission_id = '10000000-0000-0000-0000-000000000006'),
+      '00000000-0000-0000-0000-000000000102',
+      'confirmed', 8, 'Infinity'::double precision, 'glicko', '{}'::jsonb,
+      1180, 'glicko', '{}'::jsonb
+    )
+  $$,
+  '23514',
+  NULL,
+  'confirmed results reject non-finite calculated ratings'
+);
+
+SELECT is(
+  (SELECT status FROM public.game_results
+   WHERE submission_id = '10000000-0000-0000-0000-000000000006'),
+  'pending',
+  'a malformed confirmation rolls back the result transition'
+);
+
+SELECT is(
+  (SELECT rating FROM public.ratings
+   WHERE game_id = 9001
+     AND user_id = '00000000-0000-0000-0000-000000000101'),
+  1221::double precision,
+  'a malformed confirmation cannot partially mutate ratings'
 );
 
 SELECT * FROM finish();

@@ -352,9 +352,21 @@ describe('game result state-machine invariants', () => {
 
 		const staleConfigurationResult = await createPendingResult();
 		const staleConfiguration = await fetchResult(staleConfigurationResult);
+		const configurationSnapshot = staleConfiguration.rating_configuration_snapshot;
+		if (
+			configurationSnapshot === null ||
+			Array.isArray(configurationSnapshot) ||
+			typeof configurationSnapshot !== 'object'
+		) {
+			throw new Error('expected an object rating configuration snapshot');
+		}
 		const { error: configMutationError } = await admin
 			.from('games')
 			.update({
+				rating_configuration: {
+					...configurationSnapshot,
+					defaultRating: Number(configurationSnapshot.defaultRating) + 1
+				},
 				rating_configuration_revision: staleConfiguration.configuration_revision + 1
 			})
 			.eq('game_id', gameId);

@@ -150,7 +150,7 @@ supabase/
   - [x] Parameters for the Glicko system
   - [x] Parameters for the Elo system
   - [x] Safely evaluated custom formulas
-- [x] Hardened and fully tested database policies
+- [x] [Hardened and fully tested database policies](docs/database-restrictions.md)
 
 ## Rating configuration
 
