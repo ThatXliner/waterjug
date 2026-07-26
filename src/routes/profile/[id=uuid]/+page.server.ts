@@ -2,8 +2,7 @@ import { canUpdateProfile, validateDisplayName } from '$lib/profile';
 import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ params, locals: { safeGetSession, supabase } }) => {
-	const { user } = await safeGetSession();
+export const load: PageServerLoad = async ({ params, locals: { supabase, user } }) => {
 	const { data: profile, error: profileErr } = await supabase
 		.from('profiles')
 		.select('display_name, username, created_at')
@@ -50,9 +49,7 @@ export const load: PageServerLoad = async ({ params, locals: { safeGetSession, s
 };
 
 export const actions: Actions = {
-	updateProfile: async ({ params, request, locals: { safeGetSession, supabase } }) => {
-		const { user } = await safeGetSession();
-
+	updateProfile: async ({ params, request, locals: { supabase, user } }) => {
 		if (!user) {
 			error(401, 'Sign in to update your profile');
 		}

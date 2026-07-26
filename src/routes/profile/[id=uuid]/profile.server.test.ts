@@ -30,10 +30,7 @@ function actionEvent({
 		params: { id: profileUserId },
 		request: new Request('http://localhost/profile', { method: 'POST', body: formData }),
 		locals: {
-			safeGetSession: vi.fn().mockResolvedValue({
-				session: currentUserId ? {} : null,
-				user: currentUserId ? { id: currentUserId } : null
-			}),
+			user: currentUserId ? { id: currentUserId } : null,
 			supabase
 		}
 	} as never;
@@ -151,10 +148,7 @@ function loadEvent({
 	return {
 		params: { id: '4e786386-43d9-4558-9d51-423fc135ef34' },
 		locals: {
-			safeGetSession: vi.fn().mockResolvedValue({
-				session: currentUserId ? {} : null,
-				user: currentUserId ? { id: currentUserId } : null
-			}),
+			user: currentUserId ? { id: currentUserId } : null,
 			supabase: { from }
 		}
 	} as never;
