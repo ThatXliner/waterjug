@@ -95,7 +95,11 @@ const validDisplayName = fc
 function loadEvent({
 	currentUserId,
 	profile = {
-		data: { display_name: 'Water Wizard', created_at: '2024-01-02T00:00:00.000Z' },
+		data: {
+			display_name: 'Water Wizard',
+			username: 'water_wizard',
+			created_at: '2024-01-02T00:00:00.000Z'
+		},
 		error: null
 	},
 	ratings = {
@@ -164,7 +168,7 @@ describe('public profile loading', () => {
 		if (!anonymous || !owner) throw new Error('Profile loader returned no data');
 
 		expect(anonymous).toMatchObject({
-			profile: { display_name: 'Water Wizard' },
+			profile: { display_name: 'Water Wizard', username: 'water_wizard' },
 			ratings: [{ rating: 1432, game_id: 7 }],
 			tournaments: [{ tournament_id: 9, name: 'Jug Finals' }],
 			isOwner: false
