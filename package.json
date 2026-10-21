@@ -3,13 +3,13 @@
 	"version": "0.0.1",
 	"private": true,
 	"engines": {
-		"node": "24.x"
+		"node": "^24.22.1"
 	},
 	"scripts": {
 		"dev": "vite dev",
 		"build": "vite build",
 		"preview": "vite preview",
-		"test": "bun run test:db && bun run test:database:results && bun run test:integration && bun run test:unit",
+		"test": "npm run test:db && npm run test:database:results && npm run test:integration && npm run test:unit",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"lint": "prettier --check . && eslint .",
@@ -68,5 +68,6 @@
 	},
 	"overrides": {
 		"estree-walker": "2.0.2"
-	}
+	},
+	"packageManager": "npm@11.19.1"
 }

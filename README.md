@@ -60,7 +60,7 @@ No game-specific rules. No spreadsheets. Just a shared answer to _“okay, but w
 
 ### Prerequisites
 
-- [Bun](https://bun.sh/) for dependencies and scripts
+- Node.js 24.22.1 or later in the 24.x series and npm for dependencies and scripts
 - [Docker](https://docs.docker.com/get-docker/) or another Docker-compatible runtime for local Supabase
 
 ### 1. Install and start the services
@@ -68,8 +68,8 @@ No game-specific rules. No spreadsheets. Just a shared answer to _“okay, but w
 ```bash
 git clone https://github.com/ThatXliner/waterjug.git
 cd waterjug
-bun install
-bunx supabase start
+npm ci
+npx --no-install supabase start
 ```
 
 ### 2. Configure the environment
@@ -77,7 +77,7 @@ bunx supabase start
 Ask the local Supabase stack for its credentials:
 
 ```bash
-bunx supabase status -o env
+npx --no-install supabase status -o env
 ```
 
 Create `.env.local` in the project root using the values from that output:
@@ -93,7 +93,7 @@ SUPABASE_SERVICE_ROLE_KEY=<SERVICE_ROLE_KEY>
 ### 3. Launch WaterJug
 
 ```bash
-bun run dev
+npm run dev
 ```
 
 Open [localhost:5173](http://localhost:5173), create an account, and start a ladder. Supabase Studio is available at [localhost:54323](http://localhost:54323).
@@ -107,7 +107,7 @@ Open [localhost:5173](http://localhost:5173), create an account, and start a lad
 | Data    | Supabase + Postgres      | Auth, relational data, and row-level security              |
 | Ratings | TypeScript               | Glicko-2 calculations with rating deviation and volatility |
 | Tests   | Vitest + Playwright      | Unit and browser-level coverage                            |
-| Runtime | Bun + Vite               | Package management and local development                   |
+| Runtime | Node.js + Vite           | Package management and local development                   |
 
 ```text
 src/
@@ -126,13 +126,13 @@ supabase/
 
 | Command                    | Purpose                               |
 | -------------------------- | ------------------------------------- |
-| `bun run dev`              | Start the development server          |
-| `bun run build`            | Create a production build             |
-| `bun run check`            | Run Svelte and TypeScript diagnostics |
-| `bun run lint`             | Check formatting and lint rules       |
-| `bun run test:unit --run`  | Run the Vitest suite once             |
-| `bun run test:integration` | Run Playwright integration tests      |
-| `bun run update-types`     | Regenerate Supabase database types    |
+| `npm run dev`              | Start the development server          |
+| `npm run build`            | Create a production build             |
+| `npm run check`            | Run Svelte and TypeScript diagnostics |
+| `npm run lint`             | Check formatting and lint rules       |
+| `npm run test:unit --run`  | Run the Vitest suite once             |
+| `npm run test:integration` | Run Playwright integration tests      |
+| `npm run update-types`     | Regenerate Supabase database types    |
 
 ## Roadmap
 
@@ -188,9 +188,9 @@ volatility from `0.000001` to `0.2`, and τ from `0.3` to `1.2`.
 WaterJug is young, opinionated, and open to improvement. Before opening a pull request:
 
 ```bash
-bun run check
-bun run lint
-bun run test:unit --run
+npm run check
+npm run lint
+npm run test:unit --run
 ```
 
 For changes to the database, add a migration under `supabase/migrations/` and regenerate `src/lib/supabase.ts`.
@@ -200,3 +200,9 @@ For changes to the database, add a migration under `supabase/migrations/` and re
 <p align="center">
   Built for friendly competition. Maintained for the inevitable rematch.
 </p>
+
+## TLS runtime requirement
+
+Use Node.js 24.22.1 or later in the 24.x series for installs, builds, and server execution. These floors include the October 2026 eMudhra CA distrust update.
+Restart or rebuild existing deployments after upgrading; an engine declaration alone does not update a running process.
+Use `npm ci` with the committed npm lockfile. Bun 1.3.14 is vulnerable and is not a supported HTTPS runtime.
