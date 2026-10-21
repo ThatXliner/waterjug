@@ -17,40 +17,42 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Setup Node
+        uses: actions/setup-node@v6
         with:
-          bun-version: latest
+          node-version: '24.22.1'
+          cache: npm
       - name: Install dependencies
         run: |
-          bun install
-          bunx playwright install --with-deps
+          npm ci
+          npx --no-install playwright install --with-deps
       - name: Start database
         run: |
-          bunx supabase start
-          bunx supabase db reset
-          bunx supabase migration up --local
+          npx --no-install supabase start
+          npx --no-install supabase db reset
+          npx --no-install supabase migration up --local
       - name: Verify database restrictions
-        run: bun run test:db
-      - run: bun run test
+        run: npm run test:db
+      - run: npm run test
       - name: Test authorization privileges
-        run: bun run test:database:authorization
+        run: npm run test:database:authorization
       - name: Test Glicko database constraints
-        run: bun run test:database:glicko
+        run: npm run test:database:glicko
   lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Setup Node
+        uses: actions/setup-node@v6
         with:
-          bun-version: latest
+          node-version: '24.22.1'
+          cache: npm
       - name: Install dependencies
-        run: bun install
+        run: npm ci
       - name: Lint code style
-        run: bun run lint
+        run: npm run lint
       - name: Check types
-        run: bun run check
+        run: npm run check
   compare-remote-db:
     needs: test
     runs-on: ubuntu-latest
@@ -59,20 +61,21 @@ jobs:
       DB_URL: ${{ secrets.DB_URL }}
     steps:
       - uses: actions/checkout@v6
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Setup Node
+        uses: actions/setup-node@v6
         with:
-          bun-version: latest
+          node-version: '24.22.1'
+          cache: npm
       - name: Install dependencies
-        run: bun install
+        run: npm ci
       - name: Start database
         run: |
-          bunx supabase db start
-          bunx supabase db reset
-          bunx supabase migration up --local
+          npx --no-install supabase db start
+          npx --no-install supabase db reset
+          npx --no-install supabase migration up --local
       - name: Verify generated types match Postgres schema
         run: |
-          bunx supabase gen types --lang typescript \
+          npx --no-install supabase gen types --lang typescript \
             --db-url postgresql://postgres:postgres@127.0.0.1:54322/postgres \
             > src/lib/supabase.ts
           node scripts/normalize_generated_file.js src/lib/supabase.ts
@@ -85,10 +88,10 @@ jobs:
           fi
       - name: (main only) Ensure there are no unpushed migrations
         run: |
-          if bunx supabase migration list --db-url $DB_URL | grep -E '\s*(\d+) │ \s+ │ .+$'; then
+          if npx --no-install supabase migration list --db-url $DB_URL | grep -E '\s*(\d+) │ \s+ │ .+$'; then
             echo "Unpushed migrations detected:" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
-            echo "$(bunx supabase migration list --db-url $DB_URL | grep -E '\s*(\d+) │ \s+ │ .+$' --color=never)" >> $GITHUB_STEP_SUMMARY
+            echo "$(npx --no-install supabase migration list --db-url $DB_URL | grep -E '\s*(\d+) │ \s+ │ .+$' --color=never)" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
