@@ -201,8 +201,6 @@ For changes to the database, add a migration under `supabase/migrations/` and re
   Built for friendly competition. Maintained for the inevitable rematch.
 </p>
 
-## TLS runtime requirement
+## Runtime requirement
 
-Use Node.js 24.22.1 or later in the 24.x series for installs, builds, and server execution. These floors include the October 2026 eMudhra CA distrust update.
-Restart or rebuild existing deployments after upgrading; an engine declaration alone does not update a running process.
-Use `npm ci` with the committed npm lockfile. Bun 1.3.14 is vulnerable and is not a supported HTTPS runtime.
+Use Node.js 24.22.1 or later in the 24.x series. Install dependencies with `npm ci` and the committed lockfile.
